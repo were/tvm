@@ -1145,41 +1145,41 @@ bool Conv2dVNNIRel(const Array<Type>& types, int num_inputs, const Attrs& attrs,
                    const TypeReporter& reporter) {
 
   CHECK_EQ(types.size(), 3);
-  LOG(INFO) << types[0];
-  LOG(INFO) << types[1];
-  LOG(INFO) << types[2];
+
   auto x = types[0].as<TensorTypeNode>();
   auto w = types[1].as<TensorTypeNode>();
+
+  CHECK(x);
+  CHECK(w);
 
   IndexExpr N = x->shape[0];
   IndexExpr H = x->shape[1];
   IndexExpr W = x->shape[2];
   IndexExpr C = x->shape[3];
-  IndexExpr xw = x->shape[4];
-  IndexExpr xc = x->shape[5];
 
   IndexExpr KH = w->shape[0];
   IndexExpr KW = w->shape[1];
-  IndexExpr O = w->shape[2];
+  IndexExpr O_ = w->shape[2];
   IndexExpr C_ = w->shape[3];
   IndexExpr xo = w->shape[4];
-  IndexExpr xc_ = w->shape[5];
+  IndexExpr xc = w->shape[5];
 
   reporter->AssertEQ(C, C_);
-  reporter->AssertEQ(xw, xo);
-  reporter->AssertEQ(xc, xc_);
 
-  auto res = TensorTypeNode::make({N, H - KH + 1, W - KW + 1, O}, DataType(DataType::kInt, 32, 1));
+
+  auto res = TensorTypeNode::make({N, H - KH + 1, W - KW + 1, O_ * xo},
+                                  DataType(DataType::kInt, 32, 1));
   reporter->Assign(types[2], res);
 
   return false;
 }
 
 RELAY_REGISTER_OP("relay.op.nn.conv2d_vnni")
-.add_type_rel("VNNIConv2dRel", Conv2dVNNIRel)
 .set_num_inputs(2)
 .add_argument("data", "Tensor", "The input tensor.")
-.add_argument("weight", "Tensor", "The weight tensor.");
+.add_argument("weight", "Tensor", "The weight tensor.")
+.add_type_rel("VNNIConv2dRel", Conv2dVNNIRel)
+.set_support_level(10);
 
 }  // namespace relay
 }  // namespace tvm
