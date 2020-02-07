@@ -24,6 +24,8 @@ from tvm.autotvm.tuner import XGBTuner, GATuner, RandomTuner, GridSearchTuner
 from tvm.autotvm.graph_tuner import DPTuner, PBQPTuner
 import tvm.contrib.graph_runtime as runtime
 from pathlib import Path
+import topi
+from topi.util import get_const_tuple
 
 import argparse
 import logging
@@ -34,6 +36,51 @@ import mxnet as mx
 from mxnet import nd
 from mxnet.contrib.quantization import *
 import statistics
+
+
+##########################
+## Relay passes for VNNI paper
+##########################
+
+class LegalizeConv2DToConv2DVNNI(relay.ExprMutator):
+    """
+    Replaces Conv2d with Conv2d vnni.
+        * Only works for NHWC and HWIO conv2d
+        * When padding is present, it prevents transformation.
+        * Checks that input channels is multiple of 4
+        * Checks that output channels is multiple of 16
+    """
+    def visit_call(self, expr):
+        visit = super().visit_call(expr)
+        if expr.op.name == 'nn.conv2d':
+            data_layout = expr.attrs['data_layout']
+            kernel_layout = expr.attrs['kernel_layout']
+
+            if data_layout == 'NHWC' and kernel_layout == 'HWIO':
+                input_shape = get_const_tuple(expr.args[0].checked_type.shape)
+                weight_shape = get_const_tuple(expr.args[1].checked_type.shape)
+                padding = visit.attrs.get_int_tuple('padding')
+
+                if input_shape[3] % 4 == 0 and weight_shape[3] % 16 == 0 \
+                        and (padding == (0, 0) or padding == (0, 0, 0, 0)):
+
+                    # Handle the weight transform.
+                    weight = visit.args[1]
+                    weight = relay.layout_transform(weight, src_layout='HWIO', dst_layout='HWOI16o4i')
+
+                    # Handle the attrs.
+                    # FIXME - Jian - Conv2D attrs are not compatible with conv2d_vnni.
+                    # Uncomment the two lines when fixed.
+                    # Current issue - conv2d_vnni() got an unexpected keyword argument 'dilation'
+                    new_attrs = dict()
+                    # new_attrs = {k : visit.attrs[k] for k in visit.attrs.keys()}
+                    # new_attrs['kernel_layout'] = 'HWIO16o4i'
+                    return relay.op.nn.conv2d_vnni(visit.args[0],
+                                                   weight,
+                                                   **new_attrs)
+        return visit
+
+################################
 
 
 target = 'llvm -mcpu=cascadelake'
@@ -173,6 +220,11 @@ def compile_via_tvm(sym, arg_params, aux_params, symbol_file, data_shape):
     seq = relay.transform.Sequential(passes)
     with relay.transform.PassContext(opt_level=3):
         mod = seq(mod)
+
+    mod = relay.transform.InferType()(mod)
+    print(mod)
+    mod['main'] = LegalizeConv2DToConv2DVNNI().visit(mod['main'])
+    print(mod)
 
     with tvm.target.create(target):
         # mod = relay.qnn.transform.Legalize()(mod)
