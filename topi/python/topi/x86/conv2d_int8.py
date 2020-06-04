@@ -237,5 +237,6 @@ def schedule_conv2d_nhwc_pack_int8(cfg, outs):
                                  "schedule_conv2d_nhwc_pack. Only support int8".format(data.dtype))
 
         scheduled_ops.append(op)
+
     traverse(output_op)
     return s
