@@ -341,32 +341,6 @@ def bitserial_dense_strategy_cpu(attrs, inputs, out_type, target):
     return strategy
 
 def tensorizer_scheduler(attrs, outs, target):
-
-    from ....te import create_schedule
     with target:
-        sch = create_schedule([i.op for i in outs])
-        output = outs[0].op
-        def callback(op):
-            nonlocal output
-            if 'conv2d' in op.tag:
-
-                for to_split in range(len(output.axis) - 1, -1, -1):
-                    if output.axis[to_split].dom.extent.value % 16 == 0:
-                        axis = list(output.axis)
-                        outer, inner = sch[output].split(axis[to_split], 16)
-                        axis = axis[0:to_split] + axis[to_split+1:] + [outer, inner]
-                        sch[output].reorder(*axis)
-                        sch[output].vectorize(inner)
-                        sch[op].compute_at(sch[output], outer)
-                        break
-
-                axis = list(op.axis)
-                red = list(op.reduce_axis)
-                xo, xi = sch[op].split(axis[-1], 16)
-                ro, ri = sch[op].split(red[-1], 4)
-                order = axis[0:-1] + red[0:-1] + [xo, ro, xi, ri]
-                sch[op].reorder(*order)
-                sch[op].pragma(xi, 'tensorize', 'vnni')
-
-        topi.util.traverse_inline(sch, outs[0].op, callback)
-        return sch
+        import tensorizer
+        return tensorizer.INTRINSICS['vnni']['schedule'](outs)

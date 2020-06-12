@@ -116,10 +116,17 @@ struct ChooseKFromN {
     return res;
   }
 
+  Array<Integer> Reversed() {
+    Array<Integer> res;
+    for (int i = 0, n = idx.size(); i < n; ++i)
+      res.push_back(this->n - idx[i] - 1);
+    return res;
+  }
+
 };
 
-Map<IterVar, IterVar> MatchTensorizer(const te::Operation &body, const te::Operation &stencil) {
-  Map<IterVar, IterVar> res;
+Array<IterVar> MatchTensorizer(const te::Operation &body, const te::Operation &stencil) {
+  Array<IterVar> res;
   auto a = body.as<te::ComputeOpNode>();
   auto b = stencil.as<te::ComputeOpNode>();
   if (a->axis.size() < b->axis.size() || a->reduce_axis.size() < b->reduce_axis.size()) {
@@ -152,10 +159,10 @@ Map<IterVar, IterVar> MatchTensorizer(const te::Operation &body, const te::Opera
   while (axis_enum.HasNext()) {
     axis_enum.Next();
     ChooseKFromN reduce_enum(a->reduce_axis.size(), b->reduce_axis.size());
+    auto scan_idx = axis_enum.Reversed();
     while (reduce_enum.HasNext()) {
       reduce_enum.Next();
-      auto scan_idx = axis_enum.ToArray();
-      auto reduce_idx = reduce_enum.ToArray();
+      auto reduce_idx = reduce_enum.Reversed();
 
       auto f = [](const std::vector<std::pair<int, int>> &sub,
                   const std::vector<std::pair<int, int>> &super) {
@@ -175,29 +182,37 @@ Map<IterVar, IterVar> MatchTensorizer(const te::Operation &body, const te::Opera
         }
         return true;
       };
-      bool ok = true;
-      for (int i = 0, n = scan_idx.size(); i < n; ++i) {
-        auto &actual = ao.ctrl[a->axis[scan_idx[i]]->var.get()];
-        auto &paradigm = bo.ctrl[b->axis[i]->var.get()];
-        if (!f(actual, paradigm)) {
-          ok = false;
+      auto g = [f](Array<Integer> idx, Array<IterVar> axis0, Array<IterVar> axis1,
+                   std::map<const VarNode*, std::vector<std::pair<int, int>>> &c0,
+                   std::map<const VarNode*, std::vector<std::pair<int, int>>> &c1) {
+        for (int i = 0, n = idx.size(); i < n; ++i) {
+          auto actual = axis0[idx[i]];
+          auto paradigm = axis1[i];
+          if (auto ai = actual->dom->extent.as<IntImmNode>()) {
+            if (auto pi = paradigm->dom->extent.as<IntImmNode>()) {
+              if (ai->value % pi->value) {
+                return false;
+              }
+            }
+          }
+          if (!f(c0[actual->var.get()], c1[paradigm->var.get()])) {
+            return false;
+          }
         }
-      }
-      for (int i = 0, n = reduce_idx.size(); i < n; ++i) {
-        auto &actual = ao.ctrl[a->reduce_axis[reduce_idx[i]]->var.get()];
-        auto &paradigm = bo.ctrl[b->reduce_axis[i]->var.get()];
-        if (!f(actual, paradigm)) {
-          ok = false;
-        }
-      }
+        return true;
+      };
+      bool ok = g(scan_idx, a->axis, b->axis, ao.ctrl, bo.ctrl) &&
+                g(reduce_idx, a->reduce_axis, b->reduce_axis, ao.ctrl, bo.ctrl);
       if (ok) {
         for (int i = 0, n = scan_idx.size(); i < n; ++i) {
           LOG(INFO) << a->axis[scan_idx[i]] << " -> " << b->axis[i];
-          res.Set(a->axis[scan_idx[i]], b->axis[i]);
+          res.push_back(a->axis[scan_idx[i]]);
+          res.push_back(b->axis[i]);
         }
         for (int i = 0, n = reduce_idx.size(); i < n; ++i) {
-          LOG(INFO) << a->reduce_axis[scan_idx[i]] << " -> " << b->reduce_axis[i];
-          res.Set(a->reduce_axis[reduce_idx[i]], b->reduce_axis[i]);
+          LOG(INFO) << a->reduce_axis[reduce_idx[i]] << " -> " << b->reduce_axis[i];
+          res.push_back(a->reduce_axis[reduce_idx[i]]);
+          res.push_back(b->reduce_axis[i]);
         }
         return res;
       }
