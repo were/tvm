@@ -47,6 +47,7 @@ struct PreMidArithTree : public ExprVisitor {
     preorder.push_back(oi);
     VisitExpr(node->a);
     lr = 1;
+    LOG(INFO) << "mid: " << GetRef<PrimExpr>(node);
     midorder.push_back(oi);
     VisitExpr(node->b);
   }
@@ -59,9 +60,9 @@ struct PreMidArithTree : public ExprVisitor {
     combiner = cr->combiner;
     VisitExpr(cr->source[0]);
   }
-  void VisitExpr_(const CallNode *cn) {
+  void VisitExpr_(const ProducerLoadNode *load) {
     GatherAxis ga;
-    for (auto elem : cn->args) {
+    for (auto elem : load->indices) {
       ga.Gather(elem);
     }
     for (int i = 0, n = ga.vs.size(); i < n; ++i) {
@@ -143,7 +144,7 @@ Array<IterVar> MatchTensorizer(const te::Operation &body, const te::Operation &s
   CHECK_EQ(bo.midorder.size(), bo.preorder.size());
   for (int i = 0, n = ao.preorder.size(); i < n; ++i) {
     if (ao.preorder[i] != bo.preorder[i] || ao.midorder[i] != bo.midorder[i]) {
-      LOG(INFO) << i << "arith different!";
+      LOG(INFO) << i << " arith different!";
       return res;
     }
   }

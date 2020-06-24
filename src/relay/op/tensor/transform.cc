@@ -1930,7 +1930,7 @@ bool StridedSliceRel(const Array<Type>& types, int num_inputs, const Attrs& attr
   const StridedSliceAttrs* param = attrs.as<StridedSliceAttrs>();
   CHECK(param != nullptr);
   const auto* data = types[0].as<TensorTypeNode>();
-  CHECK(data != nullptr);
+  CHECK(data != nullptr) << types[0];
   auto dshape = data->shape;
   int64_t num_axis = dshape.size();
 
