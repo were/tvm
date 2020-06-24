@@ -311,6 +311,7 @@ class RelayBuildModule : public runtime::ModuleNode {
       relay_module = RunDeviceAnnotationPass(relay_module, fallback_dev->value);
     }
 
+    LOG(INFO) << AsText(relay_module, false);
     // Fuse the operations if it is needed.
     relay_module = transform::FuseOps()(relay_module);
     relay_module = transform::InferType()(relay_module);
