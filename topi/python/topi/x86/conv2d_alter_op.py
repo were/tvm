@@ -201,9 +201,9 @@ def _conv2d_legalize(attrs, inputs, arg_types):
         return None
 
     # No legalization for depthwise convolutions yet.
-    groups = attrs.get_int("groups")
-    if groups != 1:
-        return None
+    #groups = attrs.get_int("groups")
+    #if groups != 1:
+    #    return None
 
     # Collect the input tensors.
     data_tensor, kernel_tensor = arg_types[0], arg_types[1]
