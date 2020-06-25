@@ -168,8 +168,8 @@ def conv2d_NCHWc_strategy_cpu(attrs, inputs, out_type, target):
     if topi.x86.is_int8_hw_support(data.dtype, kernel.dtype):
         strategy.add_implementation(
             wrap_compute_conv2d(topi.x86.conv2d_NCHWc_int8, True, True),
-            tensorizer_scheduler,
-            #wrap_topi_schedule(topi.x86.schedule_conv2d_NCHWc_int8),
+            #tensorizer_scheduler,
+            wrap_topi_schedule(topi.x86.schedule_conv2d_NCHWc_int8),
             name="conv2d_NCHWc_int8.x86")
     else:
         strategy.add_implementation(
@@ -182,10 +182,18 @@ def conv2d_NCHWc_strategy_cpu(attrs, inputs, out_type, target):
 def depthwise_conv2d_NCHWc_strategy_cpu(attrs, inputs, out_type, target):
     """depthwise_conv2d x86 strategy"""
     strategy = _op.OpStrategy()
-    strategy.add_implementation(
-        wrap_compute_conv2d(topi.x86.depthwise_conv2d_NCHWc, True, True),
-        wrap_topi_schedule(topi.x86.schedule_depthwise_conv2d_NCHWc),
-        name="depthwise_conv2d_NCHWc.x86")
+    data, kernel = inputs
+    if topi.x86.is_int8_hw_support(data.dtype, kernel.dtype):
+        strategy.add_implementation(
+            wrap_compute_conv2d(topi.x86.depthwise_conv2d_NCHWc, True, True),
+            #tensorizer_scheduler,
+            wrap_topi_schedule(topi.x86.schedule_depthwise_conv2d_NCHWc),
+            name="depthwise_conv2d_NCHWc.x86")
+    else:
+        strategy.add_implementation(
+            wrap_compute_conv2d(topi.x86.depthwise_conv2d_NCHWc, True, True),
+            wrap_topi_schedule(topi.x86.schedule_depthwise_conv2d_NCHWc),
+            name="depthwise_conv2d_NCHWc.x86")
     return strategy
 
 @conv2d_transpose_strategy.register("cpu")

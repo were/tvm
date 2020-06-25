@@ -196,7 +196,7 @@ inline PrimExpr TryConstFold<tir::FloorDiv>(PrimExpr a, PrimExpr b) {
   TVM_ARITH_CONST_PROPAGATION({
     const DataType& rtype = a.dtype();
     if (pa && pb) {
-      CHECK_NE(pb->value, 0) << "Divide by zero";
+      CHECK_NE(pb->value, 0) << "Divide by zero" << a << ", " << b;
       return IntImm(rtype, arith::floordiv(pa->value, pb->value));
     }
     if (pa) {
@@ -204,7 +204,7 @@ inline PrimExpr TryConstFold<tir::FloorDiv>(PrimExpr a, PrimExpr b) {
     }
     if (pb) {
       if (pb->value == 1) return a;
-      CHECK_NE(pb->value, 0) << "Divide by zero";
+      CHECK_NE(pb->value, 0) << "Divide by zero" << a << ", " << b;
     }
     if (fa && fb && fb->value != 0) {
       return FloatImm(rtype, std::floor(fa->value / fb->value));
@@ -212,7 +212,7 @@ inline PrimExpr TryConstFold<tir::FloorDiv>(PrimExpr a, PrimExpr b) {
     if (fa && fa->value == 0) return a;
     if (fb) {
       if (fb->value == 1) return a;
-      CHECK_NE(fb->value, 0) << "Divide by zero";
+      CHECK_NE(fb->value, 0) << "Divide by zero" << a << ", " << b;
     }
   });
   return PrimExpr();
