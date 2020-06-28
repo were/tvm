@@ -20,11 +20,16 @@ import re
 import logging
 
 import topi
+from topi.arm_cpu.conv2d_int8 import is_int8_hw_support
 from ....target import arm_isa
+from .... import target
 from .generic import *
 from .. import op as _op
 
 logger = logging.getLogger('strategy')
+_NCHWc_matcher = re.compile("^NCHW[0-9]+c$")
+_OIHWio_matcher = re.compile("^OIHW[0-9]+i[0-9]+o$")
+
 
 @schedule_injective.register(["arm_cpu", "micro_dev"])
 def schedule_injective_arm_cpu(_, outs, target):
@@ -57,6 +62,8 @@ def conv2d_strategy_arm_cpu(attrs, inputs, out_type, target):
     if groups == 1:
         if layout == "NCHW":
             if kernel_layout == "OIHW":
+                if is_int8_hw_support(data.dtype, kernel.dtype):
+                    return conv2d_NCHWc_strategy_arm_cpu(attrs, inputs, out_type, target)
                 # ARM conv2d spatial pack schedule.
                 strategy.add_implementation(
                     wrap_compute_conv2d(topi.arm_cpu.conv2d_nchw_spatial_pack),
@@ -94,6 +101,9 @@ def conv2d_strategy_arm_cpu(attrs, inputs, out_type, target):
                     wrap_compute_conv2d(topi.arm_cpu.conv2d_nchw_spatial_pack),
                     wrap_topi_schedule(topi.arm_cpu.schedule_conv2d_nchw_spatial_pack),
                     name="conv2d_nchw_spatial_pack.arm_cpu")
+            elif _NCHWc_matcher.match(layout):
+                assert _OIHWio_matcher.match(kernel_layout) # check if kernel is OIHWio
+                conv2d_NCHWc_strategy_arm_cpu(attrs, inputs, out_type, target)
             else:
                 raise RuntimeError("Unsupported weight layout {} for conv2d NCHW".
                                    format(kernel_layout))
@@ -186,10 +196,17 @@ def conv2d_strategy_arm_cpu(attrs, inputs, out_type, target):
 def conv2d_NCHWc_strategy_arm_cpu(attrs, inputs, out_type, target):
     """conv2d_NCHWc adopted from x86"""
     strategy = _op.OpStrategy()
-    strategy.add_implementation(
-        wrap_compute_conv2d(topi.x86.conv2d_NCHWc, True, True),
-        wrap_topi_schedule(topi.x86.schedule_conv2d_NCHWc),
-        name="conv2d_NCHWc.x86")
+    data, kernel = inputs
+    if is_int8_hw_support(data.dtype, kernel.dtype):
+        strategy.add_implementation(
+            wrap_compute_conv2d(topi.arm_cpu.conv2d_NCHWc_int8, True, True),
+            wrap_topi_schedule(topi.arm_cpu.schedule_conv2d_NCHWc_int8),
+            name="conv2d_NCHWc_int8.arm_cpu")
+    else:
+        strategy.add_implementation(
+            wrap_compute_conv2d(topi.x86.conv2d_NCHWc, True, True),
+            wrap_topi_schedule(topi.x86.schedule_conv2d_NCHWc),
+            name="conv2d_NCHWc.x86")
     return strategy
 
 @depthwise_conv2d_NCHWc_strategy.register("arm_cpu")
