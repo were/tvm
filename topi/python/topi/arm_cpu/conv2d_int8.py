@@ -35,6 +35,7 @@ def is_int8_hw_support(data_dtype, kernel_dtype):
     2) LLVM version has support for the instructions.
     3) Target is skylake and above.
     """
+
     # 1) Check datatypes
     is_dtype_support = data_dtype == 'int8' and kernel_dtype == 'int8'
 
@@ -45,7 +46,7 @@ def is_int8_hw_support(data_dtype, kernel_dtype):
     # 3) Check target
     is_target_support = False
     for i in tvm.target.Target.current().options:
-        if i.startswith('-mattr=') and '+dotprod' in i:
+        if i.startswith('-mattr=') and ('+dotprod' in i):
             is_target_support = True
 
     return is_dtype_support and is_llvm_support and is_target_support
