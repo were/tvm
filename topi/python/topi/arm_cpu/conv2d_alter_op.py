@@ -28,7 +28,7 @@ from ..nn import conv2d_alter_layout, conv2d_legalize
 from ..nn.util import get_pad_tuple
 from ..util import get_const_tuple
 from ..x86.conv2d import _get_default_config as _get_x86_default_config
-from ..x86.conv2d_int8 import _get_default_config_int8
+from ..arm_cpu.conv2d_int8 import _get_default_config as _get_default_config_int8
 from ..arm_cpu.conv2d_int8 import is_int8_hw_support
 
 logger = logging.getLogger('topi')
@@ -75,7 +75,7 @@ def _alter_conv2d_layout(attrs, inputs, tinfos, out_type):
         assert data_layout == "NCHW" and kernel_layout == "OIHW"
         if cfg.is_fallback:
             _get_default_config_int8(cfg, data_tensor, kernel_tensor, strides, padding,
-                                     out_dtype, False, data_layout)
+                                     out_dtype)
 
         batch_size, in_channel, height, width = get_const_tuple(data_tensor.shape)
         out_channel, channel_multiplier, kh, kw = get_const_tuple(kernel_tensor.shape)

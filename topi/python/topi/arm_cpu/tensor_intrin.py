@@ -95,13 +95,12 @@ def dot_int8_int8_int32(int32_lanes, dtype='uint'):
             vec_c = outs[0].vload([0], dtype_c)
 
             inst = 'udot' if dtype == 'uint' else 'sdot'
-            #inst = 'llvm.aarch64.neon.%s.v%di32.v%di8' % (
-            #    inst, int32_lanes, int32_lanes * num_int8_elements)
-            inst = 'llvm.aarch64.neon.%s' % inst
+            inst = 'llvm.aarch64.neon.%s.v%di32.v%di8' % (
+                inst, int32_lanes, int32_lanes * num_int8_elements)
             print('Intrin and operands: ', inst, dtype_a, dtype_b, dtype_c)
             vdot = tvm.tir.call_llvm_intrin(dtype_c,
                                             inst,
-                                            tvm.tir.const(0, 'uint32'),
+                                            tvm.tir.const(3, 'uint32'),
                                             vec_c, vec_a, vec_b)
             ib.emit(outs[0].vstore(0, vdot))
             return ib.get()

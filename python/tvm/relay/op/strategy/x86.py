@@ -186,8 +186,8 @@ def depthwise_conv2d_NCHWc_strategy_cpu(attrs, inputs, out_type, target):
     if topi.x86.is_int8_hw_support(data.dtype, kernel.dtype):
         strategy.add_implementation(
             wrap_compute_conv2d(topi.x86.depthwise_conv2d_NCHWc, True, True),
-            #tensorizer_scheduler,
-            wrap_topi_schedule(topi.x86.schedule_depthwise_conv2d_NCHWc),
+            tensorizer_scheduler,
+            # wrap_topi_schedule(topi.x86.schedule_depthwise_conv2d_NCHWc),
             name="depthwise_conv2d_NCHWc.x86")
     else:
         strategy.add_implementation(
