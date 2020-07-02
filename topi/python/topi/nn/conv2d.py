@@ -563,7 +563,7 @@ def conv2d_NCHWc_int8(data, kernel, stride, padding, dilation, layout, out_layou
                                           ic_f_inner,
                                           oc_block,
                                           ic_s_inner].astype(out_dtype),
-                                 axis=[kh, kw, ic_outer, ic_f_inner, ic_s_inner]),
+                                 axis=[ic_outer, kh, kw, ic_f_inner, ic_s_inner]),
                           name='conv2d_NCHWc_int8', tag="conv2d_NCHWc_int8")
     # for int8 group conv support
     n_elems = 4

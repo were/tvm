@@ -200,8 +200,8 @@ def conv2d_NCHWc_strategy_arm_cpu(attrs, inputs, out_type, target):
     if is_int8_hw_support(data.dtype, kernel.dtype):
         strategy.add_implementation(
             wrap_compute_conv2d(topi.arm_cpu.conv2d_NCHWc_int8, True, True),
-            #tensorizer_scheduler,
-            wrap_topi_schedule(topi.arm_cpu.schedule_conv2d_NCHWc_int8),
+            tensorizer_scheduler,
+            # wrap_topi_schedule(topi.arm_cpu.schedule_conv2d_NCHWc_int8),
             name="conv2d_NCHWc_int8.arm_cpu")
     else:
         strategy.add_implementation(
