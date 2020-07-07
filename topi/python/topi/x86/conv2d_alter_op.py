@@ -140,7 +140,6 @@ def _alter_conv2d_layout(attrs, inputs, tinfos, out_type):
              new_attrs['out_layout'], out_dtype], topi_tmpl)
         dispatch_ctx.update(target, new_workload, cfg)
 
-        print('alter to contrib')
         return relay.nn.contrib_conv2d_nchwc(data_expr, kernel_OIHWioe, **new_attrs)
 
     if topi_tmpl == "depthwise_conv2d_NCHWc.x86":
@@ -309,7 +308,6 @@ def _conv2d_legalize(attrs, inputs, arg_types):
             else:
                 return None
 
-        print('legalize to padded')
         if oc_modified:
             new_attrs['channels'] = new_out_channel
             out = tvm.relay.nn.conv2d(data, kernel, **new_attrs)
