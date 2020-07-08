@@ -93,8 +93,8 @@ def conv2d_strategy_cpu(attrs, inputs, out_type, target):
             if topi.x86.is_int8_hw_support(data.dtype, kernel.dtype):
                 strategy.add_implementation(
                     wrap_compute_conv2d(topi.x86.conv2d_nchw_int8),
-                    tensorizer_scheduler,
-                    #wrap_topi_schedule(topi.x86.schedule_conv2d_nchw_int8),
+                    #tensorizer_scheduler,
+                    wrap_topi_schedule(topi.x86.schedule_conv2d_nchw_int8),
                     name="conv2d_nchw_int8.x86")
             else:
                 strategy.add_implementation(
@@ -168,8 +168,8 @@ def conv2d_NCHWc_strategy_cpu(attrs, inputs, out_type, target):
     if topi.x86.is_int8_hw_support(data.dtype, kernel.dtype):
         strategy.add_implementation(
             wrap_compute_conv2d(topi.x86.conv2d_NCHWc_int8, True, True),
-            tensorizer_scheduler,
-            #wrap_topi_schedule(topi.x86.schedule_conv2d_NCHWc_int8),
+            #tensorizer_scheduler,
+            wrap_topi_schedule(topi.x86.schedule_conv2d_NCHWc_int8),
             name="conv2d_NCHWc_int8.x86")
     else:
         strategy.add_implementation(
