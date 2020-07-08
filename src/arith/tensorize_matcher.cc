@@ -47,7 +47,7 @@ struct PreMidArithTree : public ExprVisitor {
     preorder.push_back(oi);
     VisitExpr(node->a);
     lr = 1;
-    LOG(INFO) << "mid: " << GetRef<PrimExpr>(node);
+    // LOG(INFO) << "mid: " << GetRef<PrimExpr>(node);
     midorder.push_back(oi);
     VisitExpr(node->b);
   }
@@ -81,7 +81,6 @@ struct ChooseKFromN {
 
   ChooseKFromN(int n_, int k_) : n(n_), k(k_), idx(k) {
     CHECK(n >= k);
-    LOG(INFO) << "Choose " << k << " from " << n;
     for (int i = 0; i < k; ++i) {
       idx[i] = i;
     }
@@ -144,7 +143,7 @@ Array<IterVar> MatchTensorizer(const te::Operation &body, const te::Operation &s
   CHECK_EQ(bo.midorder.size(), bo.preorder.size());
   for (int i = 0, n = ao.preorder.size(); i < n; ++i) {
     if (ao.preorder[i] != bo.preorder[i] || ao.midorder[i] != bo.midorder[i]) {
-      LOG(INFO) << i << " arith different!";
+      // LOG(INFO) << i << " arith different!";
       return res;
     }
   }
@@ -206,12 +205,12 @@ Array<IterVar> MatchTensorizer(const te::Operation &body, const te::Operation &s
                 g(reduce_idx, a->reduce_axis, b->reduce_axis, ao.ctrl, bo.ctrl);
       if (ok) {
         for (int i = 0, n = scan_idx.size(); i < n; ++i) {
-          LOG(INFO) << a->axis[scan_idx[i]] << " -> " << b->axis[i];
+          // LOG(INFO) << a->axis[scan_idx[i]] << " -> " << b->axis[i];
           res.push_back(a->axis[scan_idx[i]]);
           res.push_back(b->axis[i]);
         }
         for (int i = 0, n = reduce_idx.size(); i < n; ++i) {
-          LOG(INFO) << a->reduce_axis[reduce_idx[i]] << " -> " << b->reduce_axis[i];
+          // LOG(INFO) << a->reduce_axis[reduce_idx[i]] << " -> " << b->reduce_axis[i];
           res.push_back(a->reduce_axis[reduce_idx[i]]);
           res.push_back(b->reduce_axis[i]);
         }
