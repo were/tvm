@@ -166,7 +166,6 @@ Array<IterVar> MatchTensorizer(const te::Operation &body, const te::Operation &s
 
       auto f = [](const std::vector<std::pair<int, int>> &sub,
                   const std::vector<std::pair<int, int>> &super) {
-        LOG(INFO) << sub.size() << ", " << super.size();
         if (sub.size() > super.size()) {
           return false;
         }
@@ -205,7 +204,6 @@ Array<IterVar> MatchTensorizer(const te::Operation &body, const te::Operation &s
       };
       bool ok = g(scan_idx, a->axis, b->axis, ao.ctrl, bo.ctrl) &&
                 g(reduce_idx, a->reduce_axis, b->reduce_axis, ao.ctrl, bo.ctrl);
-      LOG(INFO) << "ok? " << ok;
       if (ok) {
         for (int i = 0, n = scan_idx.size(); i < n; ++i) {
           // LOG(INFO) << a->axis[scan_idx[i]] << " -> " << b->axis[i];
