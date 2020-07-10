@@ -361,8 +361,8 @@ def _dense_legalize(attrs, inputs, arg_types):
         data_dtype = 'uint8'
 
         # Multiply 128 to adjust shift.
-        adjust_weight = relay.multiply(weight, relay.const(128, 'int32'))
-        adjust_weight = relay.sum(adjust_weight, axis=[1])
+        adjust_weight = relay.sum(relay.cast(weight, dtype='int32'), axis=[1])
+        adjust_weight = relay.multiply(adjust_weight, relay.const(128, 'int32'))
         adjust_weight = relay.reshape(adjust_weight, (1, m))
 
     # Legalize if the datatypes are suitable for fast Int8 instructions.  Int8 instructions require
