@@ -64,9 +64,3 @@ def dense(data, weight, bias=None, out_dtype=None):
 def dense_legalize(attrs, inputs, types):
     # not to change by default
     return None
-
-
-@tvm.target.generic_func
-def dense_alter_layout(attrs, inputs, tinfos, out_type):
-    # not to change by default
-    return None

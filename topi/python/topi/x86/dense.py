@@ -27,7 +27,7 @@ from tvm.contrib import cblas
 from .util import get_fp32_len
 from .. import generic, tag
 from ..util import traverse_inline, get_const_tuple
-from ..nn.dense import dense_alter_layout, dense_legalize
+from ..nn.dense import dense_legalize
 from .conv2d_int8 import is_int8_hw_support
 from ..util import get_const_tuple
 
@@ -179,12 +179,14 @@ def dense_dotprod(cfg, data, weight, bias=None, out_dtype=None, out_lanes=16, re
         weight = te.compute((n // out_lanes, kk // red_lanes, out_lanes, red_lanes),
                             lambda i, j, k, l: weight[i * out_lanes + k, j * red_lanes + l])
         assert kk == k
+        M = m
     else:
         m, kk, out_lanes, red_lanes = get_const_tuple(weight.shape)
+        M = m * out_lanes
 
 
     red = te.reduce_axis((0, k), "k")
-    C = te.compute((n, m),
+    C = te.compute((n, M),
                     lambda x, y: te.sum(
                         data[x, red].astype(out_dtype) *
                         weight[y // out_lanes, red // red_lanes, y % out_lanes, red % red_lanes].astype(out_dtype), axis=red),
@@ -269,58 +271,6 @@ def schedule_dense_cblas(_, outs):
     """Create schedule for dense_cblas"""
     return generic.schedule_extern(outs)
 
-@dense_alter_layout.register("cpu")
-def _dense_alter_layout(attrs, inputs, tinfos, out_type):
-    target = tvm.target.Target.current(allow_none=False)
-    dispatch_ctx = autotvm.task.DispatchContext.current
-    _, outs = relay.backend.compile_engine.select_implementation(
-        relay.op.get("nn.dense"), attrs, tinfos, out_type, target)
-    
-    workload = autotvm.task.get_workload(outs)
-
-    print('legalize', workload)
-
-    if workload is None:
-        # The best implementation is not an AutoTVM template,
-        # we then assume it's not necessary to alter this op.
-        return None
-    cfg = dispatch_ctx.query(target, workload)
-
-    topi_tmpl = workload[0]
-    new_attrs = {k : attrs[k] for k in attrs.keys()}
-
-    print('alter dense template: ', topi_tmpl)
-
-    if topi_tmpl == 'dense_dotprod':
-        data_expr, weight_expr = inputs
-        data_tensor, weight_tensor = tinfos
-        N, kk = get_const_tuple(data_tensor.shape)
-        M, K = get_const_tuple(weight_tensor.shape)
-        assert kk == K
-
-        weight_MK = weight_expr
-        weight_MKk = relay.reshape(weight_MK, (M, K // 4, 4))
-        weight_KkM = relay.transpose(weight_MKk, axes=(1, 2, 0))
-        weight_KkMm = relay.reshape(weight_KkM, (K // 4, 4, M // 16, 16))
-        weight_MKmk = relay.transpose(weight_KkMm, axes=(2, 0, 3, 1))
-
-        # update new attrs
-        new_attrs['out_lanes'] = 16
-        new_attrs['red_lanes'] = 4
-
-        # Store altered operator's config.
-        new_data = te.placeholder((N, kk), dtype=data_tensor.dtype)
-        new_weight = te.placeholder((M // 16, K // 4, 16, 4), dtype=weight_tensor.dtype)
-        new_workload = autotvm.task.args_to_workload(
-            [new_data, new_weight, new_attrs['units'], new_attrs['out_type'], 16, 4], topi_tmpl)
-        dispatch_ctx.update(target, new_workload, cfg)
-
-        return relay.nn.denseDotProd(data_expr, weight_MKmk, **new_attrs)
-
-
-    return None
-
-
 @dense_legalize.register("cpu")
 def _dense_legalize(attrs, inputs, arg_types):
 
@@ -377,6 +327,7 @@ def _dense_legalize(attrs, inputs, arg_types):
             diff = 4 - k % 4
             data = relay.nn.pad(data, pad_width=((0, 0), (0, diff)))
             weight = relay.nn.pad(weight, pad_width=((0, 0), (0, diff)))
+            k += diff
 
         shape_changed = False
         if m % 16 != 0:
@@ -384,13 +335,23 @@ def _dense_legalize(attrs, inputs, arg_types):
             weight = relay.nn.pad(weight, pad_width=((0, diff), (0, 0)))
             shape_changed = True
             new_attrs['units'] = m + diff
+            m += diff
 
-        out = relay.nn.dense(data, weight, **new_attrs)
+        new_attrs['out_lanes'] = 16
+        new_attrs['reduce_lanes'] = 4
+
+        weight_MK = weight
+        weight_MKk = relay.reshape(weight_MK, (m, k // 4, 4))
+        weight_KkM = relay.transpose(weight_MKk, axes=(1, 2, 0))
+        weight_KkMm = relay.reshape(weight_KkM, (k // 4, 4, m // 16, 16))
+        weight_MKmk = relay.transpose(weight_KkMm, axes=(2, 0, 3, 1))
+
+        out = relay.nn.denseDotProd(data, weight_MKmk, **new_attrs)
 
         if shape_changed:
             original_out_shape = [x.value for x in output_tensor.shape]
             out = relay.strided_slice(out,
-                                      begin=relay.const([0, 0, 0, 0], "int32"),
+                                      begin=relay.const([0, 0], "int32"),
                                       end=relay.const(original_out_shape, "int32"))
 
         if is_int8_inputs:

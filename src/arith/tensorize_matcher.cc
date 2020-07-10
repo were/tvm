@@ -143,7 +143,7 @@ Array<IterVar> MatchTensorizer(const te::Operation &body, const te::Operation &s
   CHECK_EQ(bo.midorder.size(), bo.preorder.size());
   for (int i = 0, n = ao.preorder.size(); i < n; ++i) {
     if (ao.preorder[i] != bo.preorder[i] || ao.midorder[i] != bo.midorder[i]) {
-      // LOG(INFO) << i << " arith different!";
+      LOG(INFO) << i << " arith different!";
       return res;
     }
   }

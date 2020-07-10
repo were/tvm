@@ -183,10 +183,13 @@ RELAY_REGISTER_OP("nn.dense")
     .set_support_level(1)
     .add_type_rel("Dense", DenseRel<DenseAttrs>);
 
-Expr MakeDenseDotProd(Expr data, Expr weight, IndexExpr units, DataType out_dtype, IndexExpr ) {
+Expr MakeDenseDotProd(Expr data, Expr weight, IndexExpr units,
+                      DataType out_dtype, IndexExpr out_lanes, IndexExpr reduce_lanes) {
   auto attrs = make_object<DenseDotProdAttrs>();
   attrs->units = units;
   attrs->out_dtype = out_dtype;
+  attrs->out_lanes = out_lanes;
+  attrs->reduce_lanes = reduce_lanes;
   static const Op& op = Op::Get("nn.denseDotProd");
   return Call(op, {data, weight}, Attrs(attrs), {});
 }
@@ -231,6 +234,7 @@ bool DenseDotProdRel(const Array<Type>& types, int num_inputs, const Attrs& attr
   if (out_dtype.bits() == 0) {
     out_dtype = data->dtype;
   }
+
   // assign output type
   reporter->Assign(types[2], TensorType(oshape, out_dtype));
   return true;
@@ -238,7 +242,7 @@ bool DenseDotProdRel(const Array<Type>& types, int num_inputs, const Attrs& attr
 
 TVM_REGISTER_GLOBAL("relay.op.nn._make.denseDotProd").set_body_typed(MakeDenseDotProd);
 
-RELAY_REGISTER_OP("nn.dense")
+RELAY_REGISTER_OP("nn.denseDotProd")
     .describe(R"code(Applies a linear transformation: :math:`Y = XW^T`.
 
 - **data**: `(x1, x2, ..., xn, input_dim)`
@@ -251,7 +255,7 @@ RELAY_REGISTER_OP("nn.dense")
     .add_argument("data", "nD Tensor", "Input data.")
     .add_argument("weight", "2D Tensor", "Weight matrix.")
     .set_support_level(1)
-    .add_type_rel("Dense", DenseDotProdRel);
+    .add_type_rel("DenseDotProd", DenseDotProdRel);
 
 // relay.leaky_relu
 TVM_REGISTER_NODE_TYPE(LeakyReluAttrs);
