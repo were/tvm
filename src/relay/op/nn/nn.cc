@@ -183,6 +183,76 @@ RELAY_REGISTER_OP("nn.dense")
     .set_support_level(1)
     .add_type_rel("Dense", DenseRel<DenseAttrs>);
 
+Expr MakeDenseDotProd(Expr data, Expr weight, IndexExpr units, DataType out_dtype, IndexExpr ) {
+  auto attrs = make_object<DenseDotProdAttrs>();
+  attrs->units = units;
+  attrs->out_dtype = out_dtype;
+  static const Op& op = Op::Get("nn.denseDotProd");
+  return Call(op, {data, weight}, Attrs(attrs), {});
+}
+
+bool DenseDotProdRel(const Array<Type>& types, int num_inputs, const Attrs& attrs,
+              const TypeReporter& reporter) {
+  CHECK_EQ(types.size(), 3);
+  const auto* data = types[0].as<TensorTypeNode>();
+  const auto* weight = types[1].as<TensorTypeNode>();
+  if (data == nullptr) return false;
+
+  const auto* param = attrs.as<DenseDotProdAttrs>();
+  CHECK(param != nullptr);
+
+  CHECK(static_cast<int>(data->shape.size()) != 0);
+
+  Array<tvm::PrimExpr> oshape = data->shape;
+  if (param->units.defined()) {
+    Array<tvm::PrimExpr> dshape = data->shape;
+    // validate the weight shape is proper if defined
+    // Assign weight type
+    Array<IndexExpr> wshape({param->units / param->out_lanes,
+                             dshape[dshape.size() - 1] / param->reduce_lanes,
+                             param->out_lanes, param->reduce_lanes});
+    // It is possible for weight to be nullptr in which case we will use
+    // data dtype as the weight dtype. However if weight dtype is explicitly
+    // present we will use that.
+    auto weight_dtype = (weight == nullptr ? data->dtype : weight->dtype);
+    reporter->Assign(types[1], TensorType(wshape, weight_dtype));
+    oshape.Set((oshape.size() - 1), param->units);
+  } else {
+    if (weight == nullptr) return false;
+    Array<tvm::PrimExpr> wshape = weight->shape;
+    CHECK(static_cast<int>(weight->shape.size()) == 4);
+    CHECK(reporter->AssertEQ(data->shape[data->shape.size() - 1], weight->shape[1] * weight->shape[wshape.size() - 1]))
+        << "DenseRel: input dimension doesn't match,"
+        << " data shape=" << data->shape << ", weight shape=" << weight->shape;
+    oshape.Set((oshape.size() - 1), wshape[0] * wshape[wshape.size() - 2]);
+  }
+
+  DataType out_dtype = param->out_dtype;
+  if (out_dtype.bits() == 0) {
+    out_dtype = data->dtype;
+  }
+  // assign output type
+  reporter->Assign(types[2], TensorType(oshape, out_dtype));
+  return true;
+}
+
+TVM_REGISTER_GLOBAL("relay.op.nn._make.denseDotProd").set_body_typed(MakeDenseDotProd);
+
+RELAY_REGISTER_OP("nn.dense")
+    .describe(R"code(Applies a linear transformation: :math:`Y = XW^T`.
+
+- **data**: `(x1, x2, ..., xn, input_dim)`
+- **weight**: `(units, input_dim)`
+- **out**: `(x1, x2, ..., xn, units)`.
+
+)code" TVM_ADD_FILELINE)
+    .set_attrs_type<DenseDotProdAttrs>()
+    .set_num_inputs(2)
+    .add_argument("data", "nD Tensor", "Input data.")
+    .add_argument("weight", "2D Tensor", "Weight matrix.")
+    .set_support_level(1)
+    .add_type_rel("Dense", DenseDotProdRel);
+
 // relay.leaky_relu
 TVM_REGISTER_NODE_TYPE(LeakyReluAttrs);
 

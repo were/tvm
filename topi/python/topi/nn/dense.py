@@ -17,6 +17,7 @@
 """TVM operator fully connected compute."""
 from tvm import te
 from .. import tag
+import tvm
 
 def dense(data, weight, bias=None, out_dtype=None):
     """The default implementation of dense in topi.
@@ -58,3 +59,14 @@ def dense(data, weight, bias=None, out_dtype=None):
                             lambda i, j: matmul[i, j] + bias[j].astype(out_dtype), \
                             tag=tag.BROADCAST)
     return matmul
+
+@tvm.target.generic_func
+def dense_legalize(attrs, inputs, types):
+    # not to change by default
+    return None
+
+
+@tvm.target.generic_func
+def dense_alter_layout(attrs, inputs, tinfos, out_type):
+    # not to change by default
+    return None

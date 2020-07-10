@@ -1304,6 +1304,10 @@ def dense(data, weight, units=None, out_dtype=""):
     return _make.dense(data, weight, units, out_dtype)
 
 
+def denseDotProd(data, weight, units=None, out_dtype="", out_lanes=16, reduce_lanes=4):
+    return _make.denseDotProd(data, weight, units, out_dtype, out_lanes, reduce_lanes)
+
+
 def fifo_buffer(data, buffer, axis):
     """FIFO buffer to enable computation reuse in CNNs with sliding indow input
 

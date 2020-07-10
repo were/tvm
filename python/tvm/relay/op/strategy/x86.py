@@ -271,6 +271,15 @@ def dense_strategy_cpu(attrs, inputs, out_type, target):
     """dense x86 strategy"""
     strategy = _op.OpStrategy()
     m, _ = inputs[0].shape
+
+    data, kernel = inputs
+    if topi.x86.is_int8_hw_support(data.dtype, kernel.dtype):
+        strategy.add_implementation(wrap_compute_dense(topi.x86.dense_dotprod),
+                                    tensorizer_scheduler,
+                                    name="dense_dotprod",
+                                    plevel=10)
+        return strategy
+
     strategy.add_implementation(wrap_compute_dense(topi.x86.dense_nopack),
                                 wrap_topi_schedule(topi.x86.schedule_dense_nopack),
                                 name="dense_nopack.x86",

@@ -97,6 +97,14 @@ def alter_op_layout_conv2d(attrs, inputs, tinfos, out_type):
     """Alternate the layout of conv2d"""
     return topi.nn.conv2d_alter_layout(attrs, inputs, tinfos, out_type)
 
+@reg.register_legalize("nn.dense")
+def legalize_dense(attrs, inputs, types):
+    return topi.nn.dense_legalize(attrs, inputs, types)
+
+@reg.register_alter_op_layout("nn.dense")
+def alter_op_layout_dense(attrs, inputs, tinfos, out_type):
+    return topi.nn.dense_alter_layout(attrs, inputs, tinfos, out_type)
+
 @reg.register_legalize("nn.conv2d")
 def legalize_conv2d(attrs, inputs, types):
     """Legalize conv2d op.

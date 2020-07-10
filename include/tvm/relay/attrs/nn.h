@@ -931,6 +931,25 @@ struct DenseAttrs : public tvm::AttrsNode<DenseAttrs> {
   }
 };
 
+/*! \brief Attributes for dense operator */
+struct DenseDotProdAttrs : public tvm::AttrsNode<DenseDotProdAttrs> {
+  IndexExpr units;
+  DataType out_dtype;
+  IndexExpr out_lanes;
+  IndexExpr reduce_lanes;
+
+  TVM_DECLARE_ATTRS(DenseAttrs, "relay.attrs.DenseAttrs") {
+    TVM_ATTR_FIELD(units).describe("Number of hidden units of the dense transformation.");
+    TVM_ATTR_FIELD(out_lanes).describe("Number of output lanes.");
+    TVM_ATTR_FIELD(reduce_lanes).describe("Number of reduction lanes.");
+
+    // use 0 bits to indicate none.
+    TVM_ATTR_FIELD(out_dtype)
+        .set_default(NullValue<DataType>())
+        .describe("Output data type, set to explicit type under mixed precision setting");
+  }
+};
+
 /*! \brief Attributes for sparse_dense operator */
 struct SparseDenseAttrs : public tvm::AttrsNode<SparseDenseAttrs> {
   TVM_DECLARE_ATTRS(SparseDenseAttrs, "relay.attrs.SparseDenseAttrs") {}
