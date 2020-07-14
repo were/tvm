@@ -274,7 +274,15 @@ def dense_strategy_cpu(attrs, inputs, out_type, target):
 
     data, kernel = inputs
     if topi.x86.is_int8_hw_support(data.dtype, kernel.dtype):
-        strategy.add_implementation(wrap_compute_dense(topi.x86.dense_dotprod),
+        attrs = dict(attrs)
+
+        def wrapper(attrs, inputs, out_type):
+            """Compute definition of dense"""
+            out_dtype = attrs.out_dtype
+            out_dtype = inputs[0].dtype if out_dtype == "" else out_dtype
+            return [topi.x86.dense_dotprod(inputs[0], inputs[1], None, out_dtype, attrs['out_lanes'], attrs['reduce_lanes'])]
+
+        strategy.add_implementation(wrapper,
                                     tensorizer_scheduler,
                                     name="dense_dotprod",
                                     plevel=10)

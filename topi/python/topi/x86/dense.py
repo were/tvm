@@ -176,7 +176,7 @@ def dense_dotprod(cfg, data, weight, bias=None, out_dtype=None, out_lanes=16, re
     n, k = get_const_tuple(data.shape)
     if len(weight.shape) == 2:
         m, kk = get_const_tuple(weight.shape)
-        weight = te.compute((n // out_lanes, kk // red_lanes, out_lanes, red_lanes),
+        weight = te.compute((m // out_lanes, kk // red_lanes, out_lanes, red_lanes),
                             lambda i, j, k, l: weight[i * out_lanes + k, j * red_lanes + l])
         assert kk == k
         M = m
@@ -337,13 +337,24 @@ def _dense_legalize(attrs, inputs, arg_types):
             new_attrs['units'] = m + diff
             m += diff
 
-        new_attrs['out_lanes'] = 16
+        if m <= 128:
+            new_attrs['out_lanes'] = m
+        elif (m // 16) % 8:
+            diff = (8 - (m // 16) % 8) * 16
+            shape_changed = True
+            weight = relay.nn.pad(weight, pad_width=((0, diff), (0, 0)))
+            new_attrs['units'] = m + diff
+            m += diff
+            new_attrs['out_lanes'] = 128
+        else:
+            new_attrs['out_lanes'] = 128
+
         new_attrs['reduce_lanes'] = 4
 
         weight_MK = weight
         weight_MKk = relay.reshape(weight_MK, (m, k // 4, 4))
         weight_KkM = relay.transpose(weight_MKk, axes=(1, 2, 0))
-        weight_KkMm = relay.reshape(weight_KkM, (k // 4, 4, m // 16, 16))
+        weight_KkMm = relay.reshape(weight_KkM, (k // 4, 4, m // new_attrs['out_lanes'], new_attrs['out_lanes']))
         weight_MKmk = relay.transpose(weight_KkMm, axes=(2, 0, 3, 1))
 
         out = relay.nn.denseDotProd(data, weight_MKmk, **new_attrs)
