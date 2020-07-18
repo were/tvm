@@ -680,6 +680,7 @@ llvm::Function* CodeGenLLVM::GetIntrinsicDecl(llvm::Intrinsic::ID id, llvm::Type
   llvm::SmallVector<llvm::Type*, 4> overload_types;
 
 #if TVM_LLVM_VERSION >= 90
+
   auto try_match = [&](llvm::FunctionType* f_ty, bool var_arg) {
     overload_types.clear();
     llvm::ArrayRef<llvm::Intrinsic::IITDescriptor> ref(infos);
@@ -753,8 +754,20 @@ llvm::Value* CodeGenLLVM::CreateIntrinsic(const CallNode* op) {
     // mismatch will have to be treated specially here.
     // TODO(kparzysz-quic): fix this once TVM prefetch uses the same
     // type as LLVM.
-    llvm::Type* return_type = (id != llvm::Intrinsic::prefetch) ? GetLLVMType(GetRef<PrimExpr>(op))
-                                                                : llvm::Type::getVoidTy(*ctx_);
+    static auto halfx2 = llvm::VectorType::get(builder_->getHalfTy(), 2);
+    static auto float_ty = builder_->getFloatTy();
+    static auto framgent_half = llvm::StructType::create("fragment.half", halfx2, halfx2, halfx2, halfx2, halfx2, halfx2, halfx2, halfx2);
+    static auto framgent_float = llvm::StructType::create("fragment.float", float_ty, float_ty, float_ty, float_ty, float_ty, float_ty, float_ty, float_ty);
+    static std::map<int, llvm::Type*> ReturnTypes = {
+      {llvm::Intrinsic::prefetch, llvm::Type::getVoidTy(*ctx_)},
+      {llvm::Intrinsic::memset, llvm::Type::getVoidTy(*ctx_)},
+      {llvm::Intrinsic::memcpy, llvm::Type::getVoidTy(*ctx_)},
+      {llvm::Intrinsic::nvvm_wmma_m16n16k16_load_a_f16_row_stride, framgent_half},
+      {llvm::Intrinsic::nvvm_wmma_m16n16k16_load_b_f16_row_stride, framgent_half},
+      {llvm::Intrinsic::nvvm_wmma_m16n16k16_mma_row_row_f32_f32, framgent_float},
+      {llvm::Intrinsic::nvvm_wmma_m16n16k16_store_d_f32_row_stride, llvm::Type::getVoidTy(*ctx_)},
+    };
+    llvm::Type* return_type = ReturnTypes.count(id) ? ReturnTypes[id] : GetLLVMType(GetRef<PrimExpr>(op));
     llvm::Function* f = GetIntrinsicDecl(id, return_type, arg_type);
     CHECK(f) << "Cannot find intrinsic declaration, possible type mismatch: "
              << llvm::Intrinsic::getName(id, {});

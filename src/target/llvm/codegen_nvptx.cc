@@ -74,9 +74,7 @@ class CodeGenNVPTX : public CodeGenLLVM {
 #endif
       }
       buf = alloca;
-    } else {
-      CHECK(info.scope.rank == runtime::StorageRank::kShared)
-          << "Can only allocate shared or local memory inside kernel";
+    } else if (info.scope.rank == runtime::StorageRank::kShared) {
       // Shared memory: address space  == 3
       const unsigned shared_address_space = 3;
       llvm::Type* type = llvm::ArrayType::get(DTypeToLLVMType(op->dtype), constant_size);
@@ -90,10 +88,17 @@ class CodeGenNVPTX : public CodeGenLLVM {
       global->setAlignment(info.alignment);
 #endif
       buf = global;
+    } else if (info.scope.rank == runtime::StorageRank::kWMMAAccumulator) {
+      auto type = (DTypeToLLVMType(op->dtype));
+      auto st = llvm::StructType::create("fragment", type, type, type, type, type, type, type, type);
+      buf = builder_->CreateAlloca(st);
     }
 
-    buf = builder_->CreatePointerCast(
+    if (info.scope.rank == runtime::StorageRank::kWMMAAccumulator) {
+      buf = builder_->CreatePointerCast(
         buf, DTypeToLLVMType(op->dtype)->getPointerTo(buf->getType()->getPointerAddressSpace()));
+    }
+
     CHECK(!var_map_.count(op->buffer_var.get()));
     var_map_[op->buffer_var.get()] = buf;
     this->VisitStmt(op->body);
@@ -232,6 +237,23 @@ llvm::Value* CodeGenNVPTX::CreateIntrinsic(const CallNode* op) {
     auto fty = llvm::FunctionType::get(t_int32_, false);
     auto val = llvm::InlineAsm::get(fty, "activemask.b32 %0", "=r", true);
     return builder_->CreateCall(val);
+  } else if (op->op.same_as(builtin::tvm_struct_set())) {
+    auto var = Downcast<Var>(op->args[0]);
+    CHECK(var_map_.count(var.get()));
+    auto elem = builder_->CreateGEP(var_map_[var.get()], {MakeValue(op->args[1])});
+    auto attr_ptr = builder_->CreateGEP(elem, {MakeValue(op->args[2])});
+    return builder_->CreateStore(MakeValue(op->args[3]), attr_ptr);
+  } else if (op->op.same_as(builtin::tvm_struct_get())) {
+    auto var = op->args[0].as<VarNode>();
+    CHECK(var && var_map_.count(var));
+    if (var_map_[var]->getType()->isPointerTy()) {
+      auto elem = builder_->CreateGEP(var_map_[var], {MakeValue(op->args[1])});
+      auto attr_ptr = builder_->CreateGEP(elem, {MakeValue(op->args[2])});
+      return builder_->CreateLoad(attr_ptr);
+    } else {
+      unsigned idx = Downcast<IntImm>(op->args[2])->value;
+      return builder_->CreateExtractValue(var_map_[var], {idx});
+    }
   }
   return CodeGenLLVM::CreateIntrinsic(op);
 }

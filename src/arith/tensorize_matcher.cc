@@ -159,10 +159,10 @@ Array<IterVar> MatchTensorizer(const te::Operation &body, const te::Operation &s
   while (axis_enum.HasNext()) {
     axis_enum.Next();
     ChooseKFromN reduce_enum(a->reduce_axis.size(), b->reduce_axis.size());
-    auto scan_idx = axis_enum.Reversed();
+    auto scan_idx = axis_enum.ToArray();
     while (reduce_enum.HasNext()) {
       reduce_enum.Next();
-      auto reduce_idx = reduce_enum.Reversed();
+      auto reduce_idx = reduce_enum.ToArray();
 
       auto f = [](const std::vector<std::pair<int, int>> &sub,
                   const std::vector<std::pair<int, int>> &super) {
