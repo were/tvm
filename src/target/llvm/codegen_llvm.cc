@@ -762,6 +762,8 @@ llvm::Value* CodeGenLLVM::CreateIntrinsic(const CallNode* op) {
       {llvm::Intrinsic::prefetch, llvm::Type::getVoidTy(*ctx_)},
       {llvm::Intrinsic::memset, llvm::Type::getVoidTy(*ctx_)},
       {llvm::Intrinsic::memcpy, llvm::Type::getVoidTy(*ctx_)},
+      {llvm::Intrinsic::nvvm_barrier0, llvm::Type::getVoidTy(*ctx_)},
+      {llvm::Intrinsic::nvvm_barrier, llvm::Type::getVoidTy(*ctx_)},
       {llvm::Intrinsic::nvvm_wmma_m16n16k16_load_a_f16_row_stride, framgent_half},
       {llvm::Intrinsic::nvvm_wmma_m16n16k16_load_b_f16_row_stride, framgent_half},
       {llvm::Intrinsic::nvvm_wmma_m16n16k16_mma_row_row_f32_f32, framgent_float},

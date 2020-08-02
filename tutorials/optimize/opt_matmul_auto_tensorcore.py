@@ -245,7 +245,7 @@ if not nvcc.have_tensorcore(ctx.compute_version):
   print('the gpu has no tensorcore, skipping...')
   sys.exit(0)
 
-M, N, L = 512, 32, 512
+M, N, L = 128, 768, 3072
 dtype = 'float16'
 layout = 'NN'
 if len(sys.argv) >= 4:
@@ -385,7 +385,7 @@ def tune_and_evaluate(M, N, L, dtype, layout):
 # We do not run the tuning in our webpage server since it takes some time.
 # Uncomment the following line to run it by yourself.
 
-# tune_and_evaluate(M, N, L, dtype, layout)
+tune_and_evaluate(M, N, L, dtype, layout)
 
 ######################################################################
 # Sample Output

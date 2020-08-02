@@ -21,6 +21,12 @@
  * \file split_host_device.cc
  * \brief Split device function from host.
  */
+
+#include <llvm/IR/Intrinsics.h>
+#if TVM_LLVM_VERSION >= 100
+#include <llvm/IR/IntrinsicsNVPTX.h>
+#endif
+
 #include <tvm/ir/transform.h>
 #include <tvm/runtime/container.h>
 #include <tvm/runtime/registry.h>
@@ -124,6 +130,18 @@ class VarUseDefAnalysis : public StmtExprMutator {
     this->HandleUse(op->buffer_var);
     return StmtExprMutator::VisitExpr_(op);
   }
+
+  // PrimExpr VisitExpr_(const CallNode *op) final {
+  //   auto res = StmtExprMutator::VisitExpr_(op);
+  //   if (op->op.same_as(builtin::call_llvm_intrin()) ||
+  //       op->op.same_as(builtin::call_llvm_pure_intrin())) {
+  //     int id = Downcast<IntImm>(op->args[0])->value;
+  //     if (id >= llvm::Intrinsic::nvvm_wmma_m16n16k16_load_a_f16_col &&
+  //         id <= llvm::Intrinsic::nvvm_wmma_m8n8k32_store_d_s32_row_stride) {
+  //     }
+  //   }
+  //   return res;
+  // }
 
   void HandleDef(const VarNode* v) {
     CHECK(!def_count_.count(v)) << "variable " << v->name_hint

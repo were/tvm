@@ -59,6 +59,9 @@ class CodeGenNVPTX : public CodeGenLLVM {
     if (info.alignment > 16) {
       info.alignment = 16;
     }
+    bool is_fragment = info.scope.rank == runtime::StorageRank::kWMMAAccumulator ||
+                       info.scope.rank == runtime::StorageRank::kWMMAMatrixA ||
+                       info.scope.rank == runtime::StorageRank::kWMMAMatrixB;
 
     if (info.scope.rank == runtime::StorageRank::kLocal) {
       // const int local_address_space = 5;
@@ -80,7 +83,8 @@ class CodeGenNVPTX : public CodeGenLLVM {
       llvm::Type* type = llvm::ArrayType::get(DTypeToLLVMType(op->dtype), constant_size);
       // Allocate shared memory in global, address_space = 3
       llvm::GlobalVariable* global = new llvm::GlobalVariable(
-          *module_, type, false, llvm::GlobalValue::PrivateLinkage, 0, ".shared", nullptr,
+          *module_, type, false, llvm::GlobalValue::InternalLinkage, 0,
+          (op->buffer_var->name_hint + ".shared").c_str(), nullptr,
           llvm::GlobalValue::NotThreadLocal, shared_address_space);
 #if TVM_LLVM_VERSION >= 100
       global->setAlignment(llvm::Align(info.alignment));
@@ -88,13 +92,18 @@ class CodeGenNVPTX : public CodeGenLLVM {
       global->setAlignment(info.alignment);
 #endif
       buf = global;
-    } else if (info.scope.rank == runtime::StorageRank::kWMMAAccumulator) {
-      auto type = (DTypeToLLVMType(op->dtype));
-      auto st = llvm::StructType::create("fragment", type, type, type, type, type, type, type, type);
-      buf = builder_->CreateAlloca(st);
+    } else if (is_fragment) {
+      auto actual_dtype = op->dtype;
+      if (actual_dtype.bits() == 16) {
+        actual_dtype = actual_dtype.with_lanes(2);
+      }
+      auto type = (DTypeToLLVMType(actual_dtype));
+      auto st = llvm::StructType::create((op->buffer_var->name_hint + info.scope.to_string()).c_str(),
+                                         type, type, type, type, type, type, type, type);
+      buf = builder_->CreateAlloca(llvm::ArrayType::get(st, constant_size / 256));
     }
 
-    if (info.scope.rank == runtime::StorageRank::kWMMAAccumulator) {
+    if (!is_fragment) {
       buf = builder_->CreatePointerCast(
         buf, DTypeToLLVMType(op->dtype)->getPointerTo(buf->getType()->getPointerAddressSpace()));
     }
@@ -240,16 +249,18 @@ llvm::Value* CodeGenNVPTX::CreateIntrinsic(const CallNode* op) {
   } else if (op->op.same_as(builtin::tvm_struct_set())) {
     auto var = Downcast<Var>(op->args[0]);
     CHECK(var_map_.count(var.get()));
-    auto elem = builder_->CreateGEP(var_map_[var.get()], {MakeValue(op->args[1])});
-    auto attr_ptr = builder_->CreateGEP(elem, {MakeValue(op->args[2])});
-    return builder_->CreateStore(MakeValue(op->args[3]), attr_ptr);
+    auto elem = builder_->CreateInBoundsGEP(var_map_[var.get()], {builder_->getInt64(0), MakeValue(op->args[1])});
+    auto attr_ptr = builder_->CreateInBoundsGEP(elem, {builder_->getInt64(0), MakeValue(op->args[2])});
+    auto res = builder_->CreateStore(MakeValue(op->args[3]), attr_ptr);
+    return res;
   } else if (op->op.same_as(builtin::tvm_struct_get())) {
     auto var = op->args[0].as<VarNode>();
     CHECK(var && var_map_.count(var));
     if (var_map_[var]->getType()->isPointerTy()) {
-      auto elem = builder_->CreateGEP(var_map_[var], {MakeValue(op->args[1])});
-      auto attr_ptr = builder_->CreateGEP(elem, {MakeValue(op->args[2])});
-      return builder_->CreateLoad(attr_ptr);
+      auto elem = builder_->CreateInBoundsGEP(var_map_[var], {builder_->getInt64(0), MakeValue(op->args[1])});
+      auto attr_ptr = builder_->CreateInBoundsGEP(elem, {builder_->getInt64(0), MakeValue(op->args[2])});
+      auto res = builder_->CreateLoad(attr_ptr);
+      return res;
     } else {
       unsigned idx = Downcast<IntImm>(op->args[2])->value;
       return builder_->CreateExtractValue(var_map_[var], {idx});

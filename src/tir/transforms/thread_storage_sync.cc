@@ -29,6 +29,7 @@
 
 #include <unordered_map>
 #include <unordered_set>
+#include <llvm/IR/IntrinsicsNVPTX.h>
 
 #include "../../runtime/thread_storage_scope.h"
 #include "ir_util.h"
@@ -276,7 +277,31 @@ class ThreadSyncInserter : public StmtExprMutator {
         ++rw_stats_[var].write_count;
       }
       return expr;
-    } else {
+    } else if (op->op.same_as(builtin::call_llvm_intrin()) || op->op.same_as(builtin::call_llvm_pure_intrin())) {
+      int id = tvm::Downcast<IntImm>(op->args[0])->value;
+      bool is_load = id == llvm::Intrinsic::nvvm_wmma_m16n16k16_load_a_f16_row_stride ||
+                     id == llvm::Intrinsic::nvvm_wmma_m16n16k16_load_b_f16_row_stride;
+      bool is_store = id == llvm::Intrinsic::nvvm_wmma_m16n16k16_store_d_f32_row_stride;
+      if (is_load || is_store) {
+        auto address_of = Downcast<Call>(op->args[2]);
+        auto load = Downcast<Load>(address_of->args[0]);
+        auto var(GetRef<Var>(load->buffer_var.as<VarNode>()));
+        if (is_load) {
+          if (sync_scope_.rank == StorageRank::kGlobal &&
+              GetScope(var.get()).rank == StorageRank::kGlobal) {
+            ++rw_stats_[var].read_count;
+          }
+        } else if (is_store) {
+          if (sync_scope_.rank == StorageRank::kGlobal &&
+              GetScope(var.get()).rank == StorageRank::kGlobal) {
+            ++rw_stats_[var].write_count;
+          }
+        }
+      }
+      PrimExpr expr = StmtExprMutator::VisitExpr_(op);
+      return expr;
+    }
+    else {
       return StmtExprMutator::VisitExpr_(op);
     }
   }
