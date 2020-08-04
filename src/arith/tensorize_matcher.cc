@@ -187,8 +187,8 @@ Array<IterVar> MatchTensorizer(const te::Operation &body, const te::Operation &s
                    std::map<const VarNode*, std::vector<std::pair<int, int>>> &c0,
                    std::map<const VarNode*, std::vector<std::pair<int, int>>> &c1) {
         for (int i = 0, n = idx.size(); i < n; ++i) {
-          auto actual = axis0[idx[i]];
-          auto paradigm = axis1[i];
+          auto actual = axis0[(int) axis0.size() - idx[i]->value - 1];
+          auto paradigm = axis1[(int) axis1.size() - i - 1];
           if (auto ai = actual->dom->extent.as<IntImmNode>()) {
             if (auto pi = paradigm->dom->extent.as<IntImmNode>()) {
               if (ai->value % pi->value) {
@@ -206,14 +206,20 @@ Array<IterVar> MatchTensorizer(const te::Operation &body, const te::Operation &s
                 g(reduce_idx, a->reduce_axis, b->reduce_axis, ao.ctrl, bo.ctrl);
       if (ok) {
         for (int i = 0, n = scan_idx.size(); i < n; ++i) {
-          // LOG(INFO) << a->axis[scan_idx[i]] << " -> " << b->axis[i];
-          res.push_back(a->axis[scan_idx[i]]);
-          res.push_back(b->axis[i]);
+          int ia = (int) a->axis.size() - scan_idx[i]->value - 1;
+          int ib = (int) b->axis.size() - i - 1;
+          CHECK(ia >= 0 && ia < (int) a->axis.size());
+          CHECK(ib >= 0 && ib < (int) b->axis.size());
+          res.push_back(a->axis[ia]);
+          res.push_back(b->axis[ib]);
         }
         for (int i = 0, n = reduce_idx.size(); i < n; ++i) {
-          // LOG(INFO) << a->reduce_axis[reduce_idx[i]] << " -> " << b->reduce_axis[i];
-          res.push_back(a->reduce_axis[reduce_idx[i]]);
-          res.push_back(b->reduce_axis[i]);
+          int ia = (int) a->reduce_axis.size() - reduce_idx[i]->value - 1;
+          int ib = (int) b->reduce_axis.size() - i - 1;
+          CHECK(ia >= 0 && ia < (int) a->reduce_axis.size());
+          CHECK(ib >= 0 && ib < (int) b->reduce_axis.size());
+          res.push_back(a->reduce_axis[ia]);
+          res.push_back(b->reduce_axis[ib]);
         }
         return res;
       }
