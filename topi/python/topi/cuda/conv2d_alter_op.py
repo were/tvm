@@ -43,7 +43,8 @@ def _alter_conv2d_layout(attrs, inputs, tinfos, out_type):
         # we then assume it's not necessary to alter this op.
         return None
     cfg = dispatch_ctx.query(target, workload)
-    if cfg.is_fallback:  # if is fallback, clear query cache and return None
+    # TODO(@were): This is not good hack, '.nvptx'
+    if cfg.is_fallback and not workload[0].endswith('.nvptx'):  # if is fallback, clear query cache and return None
         autotvm.task.clear_fallback_cache(target, workload)
         return None
 
@@ -58,6 +59,12 @@ def _alter_conv2d_layout(attrs, inputs, tinfos, out_type):
     kernel_layout = attrs["kernel_layout"]
     data, kernel = tinfos
     out_dtype = out_type.dtype
+
+    if topi_tmpl == 'conv2d_NCHW16c_OHWI16o.nvptx':
+        new_attrs['data_layout'] = 'NCHW16c'
+        N, CI, H, W = get_const_tuple(data.shape)
+        new_attrs['kernel_layout'] = 'OIHW%di16o' % CI
+        return relay.nn.conv2d(*inputs, **new_attrs)
 
     if topi_tmpl == "conv2d_NCHWc_int8.cuda":
         assert data_layout == "NCHW" and kernel_layout == "OIHW"
@@ -218,6 +225,66 @@ def _conv2d_legalize(attrs, inputs, arg_types):
     # Get data layout. Return None if not NCHW
     data_layout = attrs['data_layout']
     kernel_layout = attrs['kernel_layout']
+
+
+    stride_w, stride_h = attrs.get_int_tuple('strides')
+
+    if data_dtype in ['float16', 'float32'] and kernel_layout == 'OIHW' and (stride_h, stride_w) == (1, 1):
+        if data_dtype != 'float16':
+            data = relay.cast(data, 'float16')
+        kernel = relay.cast(kernel, 'float16')
+        new_attrs['out_dtype'] = 'float32'
+        kh, kw = attrs.get_int_tuple('kernel_size')
+        batch, ic, height, width = get_const_tuple(data_tensor.shape)
+
+        padding = attrs.get_int_tuple('padding')
+        if len(padding) == 4:
+            pad_h = padding[0] + padding[2]
+            pad_w = padding[1] + padding[3]
+            data = relay.nn.pad(data, pad_width=((0, 0), (0, 0), (padding[0], padding[2]), (padding[1], padding[3])))
+        elif len(padding) == 2:
+            pad_h = padding[0] * 2
+            pad_w = padding[1] * 2
+            data = relay.nn.pad(data, pad_width=((0, 0), (0, 0), (padding[0], padding[0]), (padding[1], padding[1])))
+        elif len(padding) == 1:
+            pad_h = pad_w = padding[0] * 2
+            data = relay.nn.pad(data, pad_width=((0, 0), (0, 0), (padding[0], padding[0]), (padding[0], padding[0])))
+        else:
+            assert False
+        new_attrs['padding'] = [0, 0, 0, 0]
+
+        height += pad_h
+        width += pad_w
+
+        oh = (height - kh + 1) // stride_h
+        ow = (width - kw + 1) // stride_w
+        oc = attrs.get_int('channels').value
+        ow_changed = False
+        if ow % 32:
+            diff0 = stride_w - (width - kw + 1) % stride_w
+            diff1 = (32 - (ow + 1) % 32) * stride_w
+            assert (width + diff0 + diff1 - kw + 1) // stride_w % 32 == 0
+            assert (width + diff0 + diff1 - kw + 1) % stride_w == 0
+            data = relay.nn.pad(data, pad_width=((0, 0), (0, 0), (0, 0), (0, diff0 + diff1)))
+            ow_changed = True
+        if ic % 16:
+            diff = 16 - ic % 16
+            data = relay.nn.pad(data, pad_width=((0, 0), (0, diff), (0, 0), (0, 0)))
+            kernel = relay.nn.pad(kernel, pad_width=((0, 0), (0, diff), (0, 0), (0, 0)))
+        oc_changed = False
+        if oc % 32:
+            diff = 32 - oc % 32
+            kernel = relay.nn.pad(kernel, pad_width=((0, diff), (0, 0), (0, 0), (0, 0)))
+            new_attrs['channels'] = oc + diff
+            oc_changed = True
+        out = relay.nn.conv2d(data, kernel, **new_attrs)
+        if ow_changed or oc_changed:
+            begins = relay.const(tvm.nd.array([0, 0, 0, 0]))
+            ends = relay.const(tvm.nd.array([batch, oc, oh, ow]))
+            out = relay.strided_slice(out,
+                                      begin=relay.const(tvm.nd.array([0, 0, 0, 0])),
+                                      end=relay.const(tvm.nd.array([batch, oc, oh, ow])))
+        return out
 
     # Pad input and output channels to use int8 schedule.
     if data_dtype in ['int8', 'uint8']:

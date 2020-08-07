@@ -36,6 +36,7 @@ namespace codegen {
 class CodeGenNVPTX : public CodeGenLLVM {
  public:
   void AddFunction(const PrimFunc& f) final {
+    LOG(INFO) << "Emitting: " << f;
     // add function as void return value
     CodeGenLLVM::AddFunctionInternal(f, true);
     // annotate as kernel function
@@ -43,6 +44,7 @@ class CodeGenNVPTX : public CodeGenLLVM {
         ->addOperand(llvm::MDNode::get(
             *ctx_, {llvm::ValueAsMetadata::get(function_), llvm::MDString::get(*ctx_, "kernel"),
                     llvm::ValueAsMetadata::get(ConstInt32(1))}));
+    LOG(INFO) << "done........................................";
   }
 
   void VisitStmt_(const AllocateNode* op) final {
@@ -71,6 +73,7 @@ class CodeGenNVPTX : public CodeGenLLVM {
       });
       if (alloca->getAlignment() < static_cast<uint32_t>(info.alignment)) {
 #if TVM_LLVM_VERSION >= 100
+        CHECK(info.alignment);
         alloca->setAlignment(llvm::Align(info.alignment));
 #else
         alloca->setAlignment(info.alignment);

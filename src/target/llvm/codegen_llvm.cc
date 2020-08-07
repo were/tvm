@@ -94,7 +94,9 @@ void CodeGenLLVM::InitTarget(llvm::TargetMachine* tm) {
   }
 }
 
-void CodeGenLLVM::AddFunction(const PrimFunc& f) { this->AddFunctionInternal(f, false); }
+void CodeGenLLVM::AddFunction(const PrimFunc& f) {
+  this->AddFunctionInternal(f, false);
+}
 
 void CodeGenLLVM::InitFuncState() {
   var_map_.clear();
@@ -1258,6 +1260,7 @@ void CodeGenLLVM::VisitStmt_(const AllocateNode* op) {
   });
   if (alloca->getAlignment() < static_cast<uint32_t>(info.alignment)) {
 #if TVM_LLVM_VERSION >= 100
+    CHECK(info.alignment);
     alloca->setAlignment(llvm::Align(info.alignment));
 #else
     alloca->setAlignment(info.alignment);

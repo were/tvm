@@ -332,6 +332,7 @@ llvm::GlobalVariable* CodeGenCPU::InitContextPtr(llvm::Type* p_type, std::string
   llvm::GlobalVariable* gv = new llvm::GlobalVariable(
       *module_, p_type, false, llvm::GlobalValue::LinkOnceAnyLinkage, 0, name);
 #if TVM_LLVM_VERSION >= 100
+  CHECK(data_layout_->getTypeAllocSize(p_type));
   gv->setAlignment(llvm::Align(data_layout_->getTypeAllocSize(p_type)));
 #else
   gv->setAlignment(data_layout_->getTypeAllocSize(p_type));
@@ -536,6 +537,7 @@ llvm::Value* CodeGenCPU::CreateStaticHandle() {
   llvm::GlobalVariable* gv = new llvm::GlobalVariable(
       *module_, t_void_p_, false, llvm::GlobalValue::PrivateLinkage, 0, "__tvm_static_handle");
 #if TVM_LLVM_VERSION >= 100
+  CHECK(data_layout_->getTypeAllocSize(t_void_p_));
   gv->setAlignment(llvm::Align(data_layout_->getTypeAllocSize(t_void_p_)));
 #else
   gv->setAlignment(data_layout_->getTypeAllocSize(t_void_p_));
@@ -597,6 +599,7 @@ llvm::Value* CodeGenCPU::GetPackedFuncHandle(const std::string& fname) {
         new llvm::GlobalVariable(*module_, t_tvm_func_handle_, false,
                                  llvm::GlobalValue::InternalLinkage, nullptr, ".tvm_func." + fname);
 #if TVM_LLVM_VERSION >= 100
+    CHECK(align);
     hptr->setAlignment(llvm::Align(align));
 #else
     hptr->setAlignment(align);
@@ -613,6 +616,7 @@ llvm::Value* CodeGenCPU::GetPackedFuncHandle(const std::string& fname) {
 #if TVM_LLVM_VERSION >= 110
   llvm::Value* handle = builder_->CreateAlignedLoad(hptr, llvm::Align(align));
 #else
+  CHECK(align);
   llvm::Value* handle = builder_->CreateAlignedLoad(hptr, align);
 #endif
   llvm::Value* handle_not_null =
