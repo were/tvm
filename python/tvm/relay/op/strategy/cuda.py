@@ -103,15 +103,15 @@ def conv2d_strategy_cuda(attrs, inputs, out_type, target):
         raise ValueError("dilation should be positive value")
 
     if groups == 1:
-        if target.id.name == 'nvptx':
-            strides = attrs.get_int_tuple('strides')
-            if data.dtype == 'float16' and kernel.dtype == 'float16' and out_type.dtype == 'float32' and strides == (1, 1):
-                from tensorizer.ops.gpu import conv2d_NCHW16c_OHWI16o_compute, conv2d_NCHW16c_OHWI16o_schedule
-                strategy.add_implementation(
-                    conv2d_NCHW16c_OHWI16o_compute,
-                    conv2d_NCHW16c_OHWI16o_schedule,
-                    name='conv2d_NCHWc_tensorcore.nvptx')
-                return strategy
+        #if target.id.name == 'nvptx':
+        #    strides = attrs.get_int_tuple('strides')
+        #    if data.dtype == 'float16' and kernel.dtype == 'float16' and out_type.dtype == 'float32' and strides == (1, 1):
+        #        from tensorizer.ops.gpu import conv2d_NCHW16c_OHWI16o_compute, conv2d_NCHW16c_OHWI16o_schedule
+        #        strategy.add_implementation(
+        #            conv2d_NCHW16c_OHWI16o_compute,
+        #            conv2d_NCHW16c_OHWI16o_schedule,
+        #            name='conv2d_NCHWc_tensorcore.nvptx')
+        #        return strategy
         if layout == "NCHW":
             assert kernel_layout == "OIHW"
             if data.dtype in ('int8', 'uint8') and kernel.dtype in ('int8', 'uint8'):

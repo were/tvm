@@ -227,64 +227,64 @@ def _conv2d_legalize(attrs, inputs, arg_types):
     kernel_layout = attrs['kernel_layout']
 
 
-    stride_w, stride_h = attrs.get_int_tuple('strides')
+    #stride_w, stride_h = attrs.get_int_tuple('strides')
 
-    if data_dtype in ['float16', 'float32'] and kernel_layout == 'OIHW' and (stride_h, stride_w) == (1, 1):
-        if data_dtype != 'float16':
-            data = relay.cast(data, 'float16')
-        kernel = relay.cast(kernel, 'float16')
-        new_attrs['out_dtype'] = 'float32'
-        kh, kw = attrs.get_int_tuple('kernel_size')
-        batch, ic, height, width = get_const_tuple(data_tensor.shape)
+    #if data_dtype in ['float16', 'float32'] and kernel_layout == 'OIHW' and (stride_h, stride_w) == (1, 1):
+    #    if data_dtype != 'float16':
+    #        data = relay.cast(data, 'float16')
+    #    kernel = relay.cast(kernel, 'float16')
+    #    new_attrs['out_dtype'] = 'float32'
+    #    kh, kw = attrs.get_int_tuple('kernel_size')
+    #    batch, ic, height, width = get_const_tuple(data_tensor.shape)
 
-        padding = attrs.get_int_tuple('padding')
-        if len(padding) == 4:
-            pad_h = padding[0] + padding[2]
-            pad_w = padding[1] + padding[3]
-            data = relay.nn.pad(data, pad_width=((0, 0), (0, 0), (padding[0], padding[2]), (padding[1], padding[3])))
-        elif len(padding) == 2:
-            pad_h = padding[0] * 2
-            pad_w = padding[1] * 2
-            data = relay.nn.pad(data, pad_width=((0, 0), (0, 0), (padding[0], padding[0]), (padding[1], padding[1])))
-        elif len(padding) == 1:
-            pad_h = pad_w = padding[0] * 2
-            data = relay.nn.pad(data, pad_width=((0, 0), (0, 0), (padding[0], padding[0]), (padding[0], padding[0])))
-        else:
-            assert False
-        new_attrs['padding'] = [0, 0, 0, 0]
+    #    padding = attrs.get_int_tuple('padding')
+    #    if len(padding) == 4:
+    #        pad_h = padding[0] + padding[2]
+    #        pad_w = padding[1] + padding[3]
+    #        data = relay.nn.pad(data, pad_width=((0, 0), (0, 0), (padding[0], padding[2]), (padding[1], padding[3])))
+    #    elif len(padding) == 2:
+    #        pad_h = padding[0] * 2
+    #        pad_w = padding[1] * 2
+    #        data = relay.nn.pad(data, pad_width=((0, 0), (0, 0), (padding[0], padding[0]), (padding[1], padding[1])))
+    #    elif len(padding) == 1:
+    #        pad_h = pad_w = padding[0] * 2
+    #        data = relay.nn.pad(data, pad_width=((0, 0), (0, 0), (padding[0], padding[0]), (padding[0], padding[0])))
+    #    else:
+    #        assert False
+    #    new_attrs['padding'] = [0, 0, 0, 0]
 
-        height += pad_h
-        width += pad_w
+    #    height += pad_h
+    #    width += pad_w
 
-        oh = (height - kh + 1) // stride_h
-        ow = (width - kw + 1) // stride_w
-        oc = attrs.get_int('channels').value
-        ow_changed = False
-        if ow % 32:
-            diff0 = stride_w - (width - kw + 1) % stride_w
-            diff1 = (32 - (ow + 1) % 32) * stride_w
-            assert (width + diff0 + diff1 - kw + 1) // stride_w % 32 == 0
-            assert (width + diff0 + diff1 - kw + 1) % stride_w == 0
-            data = relay.nn.pad(data, pad_width=((0, 0), (0, 0), (0, 0), (0, diff0 + diff1)))
-            ow_changed = True
-        if ic % 16:
-            diff = 16 - ic % 16
-            data = relay.nn.pad(data, pad_width=((0, 0), (0, diff), (0, 0), (0, 0)))
-            kernel = relay.nn.pad(kernel, pad_width=((0, 0), (0, diff), (0, 0), (0, 0)))
-        oc_changed = False
-        if oc % 32:
-            diff = 32 - oc % 32
-            kernel = relay.nn.pad(kernel, pad_width=((0, diff), (0, 0), (0, 0), (0, 0)))
-            new_attrs['channels'] = oc + diff
-            oc_changed = True
-        out = relay.nn.conv2d(data, kernel, **new_attrs)
-        if ow_changed or oc_changed:
-            begins = relay.const(tvm.nd.array([0, 0, 0, 0]))
-            ends = relay.const(tvm.nd.array([batch, oc, oh, ow]))
-            out = relay.strided_slice(out,
-                                      begin=relay.const(tvm.nd.array([0, 0, 0, 0])),
-                                      end=relay.const(tvm.nd.array([batch, oc, oh, ow])))
-        return out
+    #    oh = (height - kh + 1) // stride_h
+    #    ow = (width - kw + 1) // stride_w
+    #    oc = attrs.get_int('channels').value
+    #    ow_changed = False
+    #    if ow % 32:
+    #        diff0 = stride_w - (width - kw + 1) % stride_w
+    #        diff1 = (32 - (ow + 1) % 32) * stride_w
+    #        assert (width + diff0 + diff1 - kw + 1) // stride_w % 32 == 0
+    #        assert (width + diff0 + diff1 - kw + 1) % stride_w == 0
+    #        data = relay.nn.pad(data, pad_width=((0, 0), (0, 0), (0, 0), (0, diff0 + diff1)))
+    #        ow_changed = True
+    #    if ic % 16:
+    #        diff = 16 - ic % 16
+    #        data = relay.nn.pad(data, pad_width=((0, 0), (0, diff), (0, 0), (0, 0)))
+    #        kernel = relay.nn.pad(kernel, pad_width=((0, 0), (0, diff), (0, 0), (0, 0)))
+    #    oc_changed = False
+    #    if oc % 32:
+    #        diff = 32 - oc % 32
+    #        kernel = relay.nn.pad(kernel, pad_width=((0, diff), (0, 0), (0, 0), (0, 0)))
+    #        new_attrs['channels'] = oc + diff
+    #        oc_changed = True
+    #    out = relay.nn.conv2d(data, kernel, **new_attrs)
+    #    if ow_changed or oc_changed:
+    #        begins = relay.const(tvm.nd.array([0, 0, 0, 0]))
+    #        ends = relay.const(tvm.nd.array([batch, oc, oh, ow]))
+    #        out = relay.strided_slice(out,
+    #                                  begin=relay.const(tvm.nd.array([0, 0, 0, 0])),
+    #                                  end=relay.const(tvm.nd.array([batch, oc, oh, ow])))
+    #    return out
 
     # Pad input and output channels to use int8 schedule.
     if data_dtype in ['int8', 'uint8']:

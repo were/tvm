@@ -120,6 +120,7 @@ void CodeGenC::AddFunction(const PrimFunc& f) {
   this->EndScope(func_scope);
   this->PrintIndent();
   this->stream << "}\n\n";
+  LOG(INFO) << stream.str();
 }
 
 void CodeGenC::PrintFuncPrefix() { stream << "void"; }
