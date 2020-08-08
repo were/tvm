@@ -36,7 +36,7 @@ namespace codegen {
 class CodeGenNVPTX : public CodeGenLLVM {
  public:
   void AddFunction(const PrimFunc& f) final {
-    LOG(INFO) << "Emitting: " << f;
+    LOG(INFO) << f;
     // add function as void return value
     CodeGenLLVM::AddFunctionInternal(f, true);
     // annotate as kernel function
@@ -44,7 +44,6 @@ class CodeGenNVPTX : public CodeGenLLVM {
         ->addOperand(llvm::MDNode::get(
             *ctx_, {llvm::ValueAsMetadata::get(function_), llvm::MDString::get(*ctx_, "kernel"),
                     llvm::ValueAsMetadata::get(ConstInt32(1))}));
-    LOG(INFO) << "done........................................";
   }
 
   void VisitStmt_(const AllocateNode* op) final {
@@ -54,7 +53,10 @@ class CodeGenNVPTX : public CodeGenLLVM {
     int32_t constant_size = op->constant_allocation_size();
     CHECK_GT(constant_size, 0) << "Can only handle constant size stack allocation in GPU";
     StorageInfo& info = alloc_storage_info_[op->buffer_var.get()];
-    if (constant_size % 4 == 0 && info.alignment == 0) {
+    if (info.alignment == 0) {
+      if (constant_size % 4) {
+        constant_size += 4 - constant_size % 4;
+      }
       info.alignment = GetTempAllocaAlignment(op->dtype, constant_size);
     }
     // maximum necessary alignment in the NV devices
@@ -90,6 +92,7 @@ class CodeGenNVPTX : public CodeGenLLVM {
           (op->buffer_var->name_hint + ".shared").c_str(), nullptr,
           llvm::GlobalValue::NotThreadLocal, shared_address_space);
 #if TVM_LLVM_VERSION >= 100
+      CHECK(info.alignment) << op->buffer_var->name_hint << ": " << info.alignment << " " << constant_size;
       global->setAlignment(llvm::Align(info.alignment));
 #else
       global->setAlignment(info.alignment);
