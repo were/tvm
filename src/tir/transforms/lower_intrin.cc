@@ -62,10 +62,12 @@ class IntrinInjecter : public tvm::arith::IRMutatorWithAnalyzer {
   }
 
   PrimExpr VisitExpr_(const AddNode* op) final {
-    if (const MulNode* mb = op->b.as<MulNode>()) {
-      return MakeFMA(mb->a, mb->b, op->a, op);
-    } else if (const MulNode* ma = op->a.as<MulNode>()) {
-      return MakeFMA(ma->a, ma->b, op->b, op);
+    if (op->dtype.is_scalar()) {
+      if (const MulNode* mb = op->b.as<MulNode>()) {
+        return MakeFMA(mb->a, mb->b, op->a, op);
+      } else if (const MulNode* ma = op->a.as<MulNode>()) {
+        return MakeFMA(ma->a, ma->b, op->b, op);
+      }
     }
     return IRMutatorWithAnalyzer::VisitExpr_(op);
   }

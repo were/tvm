@@ -36,7 +36,6 @@ namespace codegen {
 class CodeGenNVPTX : public CodeGenLLVM {
  public:
   void AddFunction(const PrimFunc& f) final {
-    LOG(INFO) << f;
     // add function as void return value
     CodeGenLLVM::AddFunctionInternal(f, true);
     // annotate as kernel function
