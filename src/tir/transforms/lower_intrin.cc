@@ -41,6 +41,7 @@ class IntrinInjecter : public tvm::arith::IRMutatorWithAnalyzer {
   using IRMutatorWithAnalyzer::VisitStmt_;
 
   IntrinInjecter(arith::Analyzer* analyzer, std::string target) : IRMutatorWithAnalyzer(analyzer) {
+    target_ = target;
     patterns_.push_back("tvm.intrin.rule." + target + ".");
     patterns_.push_back("tvm.intrin.rule.default.");
     fma_ = runtime::Registry::Get(patterns_[0] + "fma");
@@ -62,10 +63,12 @@ class IntrinInjecter : public tvm::arith::IRMutatorWithAnalyzer {
   }
 
   PrimExpr VisitExpr_(const AddNode* op) final {
-    if (const MulNode* mb = op->b.as<MulNode>()) {
-      return MakeFMA(mb->a, mb->b, op->a, op);
-    } else if (const MulNode* ma = op->a.as<MulNode>()) {
-      return MakeFMA(ma->a, ma->b, op->b, op);
+    if (op->dtype.is_scalar()) {
+      if (const MulNode* mb = op->b.as<MulNode>()) {
+        return MakeFMA(mb->a, mb->b, op->a, op);
+      } else if (const MulNode* ma = op->a.as<MulNode>()) {
+        return MakeFMA(ma->a, ma->b, op->b, op);
+      }
     }
     return IRMutatorWithAnalyzer::VisitExpr_(op);
   }
@@ -272,6 +275,7 @@ class IntrinInjecter : public tvm::arith::IRMutatorWithAnalyzer {
   std::vector<std::string> patterns_;
   const PackedFunc* fma_{nullptr};
   bool support_bitwise_op_{true};
+  std::string target_;
 };
 
 Stmt LowerIntrinStmt(Stmt stmt, const std::string& target) {
