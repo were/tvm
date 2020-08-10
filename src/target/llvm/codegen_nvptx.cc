@@ -36,7 +36,6 @@ namespace codegen {
 class CodeGenNVPTX : public CodeGenLLVM {
  public:
   void AddFunction(const PrimFunc& f) final {
-    LOG(INFO) << f;
     // add function as void return value
     CodeGenLLVM::AddFunctionInternal(f, true);
     // annotate as kernel function
@@ -255,7 +254,8 @@ llvm::Value* CodeGenNVPTX::CreateIntrinsic(const CallNode* op) {
   } else if (op->op.same_as(builtin::tvm_struct_set())) {
     auto var = Downcast<Var>(op->args[0]);
     CHECK(var_map_.count(var.get()));
-    auto elem = builder_->CreateInBoundsGEP(var_map_[var.get()], {builder_->getInt64(0), MakeValue(op->args[1])});
+    auto ptr = var_map_[var.get()];
+    auto elem = builder_->CreateInBoundsGEP(ptr, {builder_->getInt64(0), MakeValue(op->args[1])});
     auto attr_ptr = builder_->CreateInBoundsGEP(elem, {builder_->getInt64(0), MakeValue(op->args[2])});
     auto res = builder_->CreateStore(MakeValue(op->args[3]), attr_ptr);
     return res;
@@ -263,7 +263,8 @@ llvm::Value* CodeGenNVPTX::CreateIntrinsic(const CallNode* op) {
     auto var = op->args[0].as<VarNode>();
     CHECK(var && var_map_.count(var));
     if (var_map_[var]->getType()->isPointerTy()) {
-      auto elem = builder_->CreateInBoundsGEP(var_map_[var], {builder_->getInt64(0), MakeValue(op->args[1])});
+      auto ptr = var_map_[var];
+      auto elem = builder_->CreateInBoundsGEP(ptr, {builder_->getInt64(0), MakeValue(op->args[1])});
       auto attr_ptr = builder_->CreateInBoundsGEP(elem, {builder_->getInt64(0), MakeValue(op->args[2])});
       auto res = builder_->CreateLoad(attr_ptr);
       return res;

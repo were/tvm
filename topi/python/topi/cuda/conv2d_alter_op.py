@@ -63,7 +63,7 @@ def _alter_conv2d_layout(attrs, inputs, tinfos, out_type):
     if topi_tmpl == 'conv2d_NCHW16c_OHWI16o.nvptx':
         new_attrs['data_layout'] = 'NCHW16c'
         N, CI, H, W = get_const_tuple(data.shape)
-        new_attrs['kernel_layout'] = 'OIHW%di16o' % CI
+        new_attrs['kernel_layout'] = 'OIHW16i16o'
         return relay.nn.conv2d(*inputs, **new_attrs)
 
     if topi_tmpl == "conv2d_NCHWc_int8.cuda":
@@ -238,20 +238,22 @@ def _conv2d_legalize(attrs, inputs, arg_types):
         batch, ic, height, width = get_const_tuple(data_tensor.shape)
 
         padding = attrs.get_int_tuple('padding')
-        if len(padding) == 4:
-            pad_h = padding[0] + padding[2]
-            pad_w = padding[1] + padding[3]
-            data = relay.nn.pad(data, pad_width=((0, 0), (0, 0), (padding[0], padding[2]), (padding[1], padding[3])))
-        elif len(padding) == 2:
-            pad_h = padding[0] * 2
-            pad_w = padding[1] * 2
-            data = relay.nn.pad(data, pad_width=((0, 0), (0, 0), (padding[0], padding[0]), (padding[1], padding[1])))
-        elif len(padding) == 1:
-            pad_h = pad_w = padding[0] * 2
-            data = relay.nn.pad(data, pad_width=((0, 0), (0, 0), (padding[0], padding[0]), (padding[0], padding[0])))
-        else:
-            assert False
-        new_attrs['padding'] = [0, 0, 0, 0]
+        pad_h = pad_w = 0
+        if sum(padding):
+            if len(padding) == 4:
+                pad_h = padding[0] + padding[2]
+                pad_w = padding[1] + padding[3]
+                data = relay.nn.pad(data, pad_width=((0, 0), (0, 0), (padding[0], padding[2]), (padding[1], padding[3])))
+            elif len(padding) == 2:
+                pad_h = padding[0] * 2
+                pad_w = padding[1] * 2
+                data = relay.nn.pad(data, pad_width=((0, 0), (0, 0), (padding[0], padding[0]), (padding[1], padding[1])))
+            elif len(padding) == 1:
+                pad_h = pad_w = padding[0] * 2
+                data = relay.nn.pad(data, pad_width=((0, 0), (0, 0), (padding[0], padding[0]), (padding[0], padding[0])))
+            else:
+                assert False
+            new_attrs['padding'] = [0, 0, 0, 0]
 
         height += pad_h
         width += pad_w
@@ -260,12 +262,24 @@ def _conv2d_legalize(attrs, inputs, arg_types):
         ow = (width - kw + 1) // stride_w
         oc = attrs.get_int('channels').value
         ow_changed = False
-        if ow % 32:
-            diff0 = stride_w - (width - kw + 1) % stride_w
-            diff1 = (32 - (ow + 1) % 32) * stride_w
-            assert (width + diff0 + diff1 - kw + 1) // stride_w % 32 == 0
-            assert (width + diff0 + diff1 - kw + 1) % stride_w == 0
-            data = relay.nn.pad(data, pad_width=((0, 0), (0, 0), (0, 0), (0, diff0 + diff1)))
+
+        #if ow % 32:
+        #    diff0 = stride_w - (width - kw + 1) % stride_w
+        #    diff1 = (32 - (ow + 1) % 32) * stride_w
+        #    assert (width + diff0 + diff1 - kw + 1) // stride_w % 32 == 0
+        #    assert (width + diff0 + diff1 - kw + 1) % stride_w == 0
+        #    data = relay.nn.pad(data, pad_width=((0, 0), (0, 0), (0, 0), (0, diff0 + diff1)))
+        #    ow_changed = True
+        if not ((oh * ow % 32 == 0 and 32 % ow == 0) or ow % 32 == 0):
+            max_diff_h = 32 - oh % 32
+            max_diff_w = 32 - ow % 32
+            diffh = diffw = 1e9
+            for i in range(max_diff_h + 1):
+                for j in range(max_diff_w + 1):
+                    if (((oh + i) * (ow + j) % 32 == 0 and 32 % (ow + j) == 0) or ((ow + j) % 32 == 0)) and i + j < diffh + diffw:
+                        diffh, diffw = i, j
+            assert (height + diffh - kh + 1) * (width + diffw - kw + 1) % 32 == 0
+            data = relay.nn.pad(data, pad_width=((0, 0), (0, 0), (0, diffh), (0, diffw)))
             ow_changed = True
         if ic % 16:
             diff = 16 - ic % 16
