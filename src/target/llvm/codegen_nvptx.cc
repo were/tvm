@@ -312,6 +312,7 @@ runtime::Module BuildNVPTX(IRModule mod, std::string target) {
   for (auto kv : mod->functions) {
     CHECK(kv.second->IsInstance<PrimFuncNode>()) << "Can only lower IR Module with PrimFuncs";
     auto f = Downcast<PrimFunc>(kv.second);
+    LOG(INFO) << f;
     cg->AddFunction(f);
   }
 

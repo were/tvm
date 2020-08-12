@@ -300,8 +300,7 @@ class ThreadSyncInserter : public StmtExprMutator {
       }
       PrimExpr expr = StmtExprMutator::VisitExpr_(op);
       return expr;
-    }
-    else {
+    } else {
       return StmtExprMutator::VisitExpr_(op);
     }
   }

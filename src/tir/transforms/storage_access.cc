@@ -20,6 +20,8 @@
 /*!
  * \file storage_access.cc
  */
+#include <llvm/IR/IntrinsicsNVPTX.h>
+
 #include "storage_access.h"
 
 #include <tvm/target/target_info.h>
@@ -182,8 +184,27 @@ void StorageAccessVisitor::VisitStmt_(const IfThenElseNode* op) {
 
 void StorageAccessVisitor::VisitExpr_(const CallNode* op) {
   if (op->op.same_as(builtin::address_of())) {
-    const LoadNode* l = op->args[0].as<LoadNode>();
-    StmtExprVisitor::VisitExpr_(l);
+    if (!is_wmma_store) {
+      const LoadNode* l = op->args[0].as<LoadNode>();
+      StmtExprVisitor::VisitExpr_(l);
+    } else {
+      const LoadNode* l = op->args[0].as<LoadNode>();
+      const VarNode* buf = l->buffer_var.as<VarNode>();
+      StorageScope scope = GetScope(buf);
+      if (Enabled(buf, scope)) {
+        CHECK(allow_append_);
+        AccessEntry e;
+        e.threads = env_threads();
+        e.buffer = l->buffer_var;
+        e.dtype = l->dtype.element_of();
+        e.touched = arith::IntSet::Vector(l->index);
+        e.type = kWrite;
+        e.scope = scope;
+        curr_stmt_.access.emplace_back(std::move(e));
+      }
+      // traverse child
+      StmtExprVisitor::VisitExpr_(l);
+    }
   } else if (op->op.same_as(builtin::tvm_access_ptr())) {
     CHECK_EQ(op->args.size(), 5U);
     DataType dtype = op->args[0].dtype();
@@ -222,6 +243,16 @@ void StorageAccessVisitor::VisitExpr_(const CallNode* op) {
       e.scope = StorageScope::Create(s);
       curr_stmt_.access.emplace_back(std::move(e));
     }
+  } else if (op->op.same_as(builtin::call_llvm_intrin()) || op->op.same_as(builtin::call_llvm_pure_intrin())) {
+      int id = tvm::Downcast<IntImm>(op->args[0])->value;
+      bool old_load = is_wmma_load;
+      bool old_store = is_wmma_store;
+      is_wmma_load = id == llvm::Intrinsic::nvvm_wmma_m16n16k16_load_a_f16_row_stride ||
+                     id == llvm::Intrinsic::nvvm_wmma_m16n16k16_load_b_f16_row_stride;
+      is_wmma_store = id == llvm::Intrinsic::nvvm_wmma_m16n16k16_store_d_f32_row_stride;
+      StmtExprVisitor::VisitExpr_(op);
+      is_wmma_load = old_load;
+      is_wmma_store = old_store;
   } else {
     StmtExprVisitor::VisitExpr_(op);
   }

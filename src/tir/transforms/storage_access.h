@@ -121,6 +121,10 @@ class StorageAccessVisitor : public StmtExprVisitor {
   // access scope
   std::vector<std::vector<StmtEntry> > scope_;
 
+  // handle tensorcore intrinsics
+  bool is_wmma_load{false};
+  bool is_wmma_store{false};
+
  private:
   // whether access appending is enabled.
   bool allow_append_{false};
