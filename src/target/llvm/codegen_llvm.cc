@@ -938,11 +938,7 @@ DEFINE_CODEGEN_BINARY_OP(Mul);
       return builder_->CreateICmpU##Op(a, b);                                        \
     } else {                                                                         \
       CHECK(t.is_float());                                                           \
-      llvm::errs() << *a << "\n"; \
-      llvm::errs() << *b << "\n"; \
-      auto res = builder_->CreateFCmpO##Op(a, b);                                        \
-      llvm::errs() << "created"; \
-      return res; \
+      return builder_->CreateFCmpO##Op(a, b);                                        \
     }                                                                                \
   }                                                                                  \
   llvm::Value* CodeGenLLVM::VisitExpr_(const Op##Node* op) {                         \
