@@ -56,6 +56,12 @@ namespace transform {
 Pass LambdaLift();
 Pass InlinePrimitives();
 
+Pass PostponeSlicing() {
+  auto f = tvm::runtime::Registry::Get("relay.transform.PostponeStridedSlice");
+  CHECK(f != nullptr) << "unable to load postpone strided slice pass";
+  return (*f)();
+}
+
 Pass ManifestAlloc(Target target_host) {
   auto f = tvm::runtime::Registry::Get("relay.transform.ManifestAlloc");
   CHECK(f != nullptr) << "unable to load allocation manifestation pass";
@@ -881,11 +887,17 @@ transform::Sequential MemoryOpt(tvm::Target host_target) {
   // Compute away possibly introduced constant computation.
   pass_seqs.push_back(transform::FoldConstant());
 
+  // Postpone strided slicing before fusion.
+  pass_seqs.push_back(transform::PostponeSlicing());
+
   // Fuse the shape functions.
   pass_seqs.push_back(transform::FuseOps());
 
   // Manifest the allocations needed for the shape functions.
   pass_seqs.push_back(transform::ManifestAlloc(host_target));
+
+  // Postpone strided slicing before fusion.
+  pass_seqs.push_back(transform::PostponeSlicing());
 
   // Fuse the shape functions.
   pass_seqs.push_back(transform::FuseOps());
@@ -895,6 +907,9 @@ transform::Sequential MemoryOpt(tvm::Target host_target) {
 
   // Compute away constant computation introduced by coalescing allocations.
   pass_seqs.push_back(transform::FoldConstant());
+
+  // Postpone strided slicing before fusion.
+  pass_seqs.push_back(transform::PostponeSlicing());
 
   // Fuse the shape functions.
   pass_seqs.push_back(transform::FuseOps());
@@ -961,6 +976,7 @@ IRModule VMCompiler::OptimizeModule(const IRModule& mod, const TargetsMap& targe
 
   pass_seqs.push_back(transform::FoldConstant());
 
+  pass_seqs.push_back(transform::PostponeSlicing());
   pass_seqs.push_back(transform::FuseOps());
   pass_seqs.push_back(transform::ToANormalForm());
   pass_seqs.push_back(transform::LambdaLift());

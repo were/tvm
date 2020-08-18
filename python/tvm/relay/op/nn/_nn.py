@@ -96,8 +96,8 @@ reg.register_pattern("nn.conv1d", OpPattern.OUT_ELEMWISE_FUSABLE)
 
 # conv2d
 reg.register_strategy("nn.conv2d", strategy.conv2d_strategy)
-reg.register_pattern("nn.conv2d", OpPattern.OPAQUE)
-#reg.register_pattern("nn.conv2d", OpPattern.OUT_ELEMWISE_FUSABLE)
+#reg.register_pattern("nn.conv2d", OpPattern.OPAQUE)
+reg.register_pattern("nn.conv2d", OpPattern.OUT_ELEMWISE_FUSABLE)
 
 @reg.register_alter_op_layout("nn.conv2d")
 def alter_op_layout_conv2d(attrs, inputs, tinfos, out_type):

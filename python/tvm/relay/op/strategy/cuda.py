@@ -105,7 +105,12 @@ def conv2d_strategy_cuda(attrs, inputs, out_type, target):
     if groups == 1:
         if target.id.name == 'nvptx':
             strides = attrs.get_int_tuple('strides')
-            if data.dtype == 'float16' and kernel.dtype == 'float16' and out_type.dtype == 'float32' and strides == (1, 1):
+            if len(data.shape) == 4:
+                n, c, h, w = get_const_tuple(data.shape)
+            else:
+                n, c, h, w, _ = get_const_tuple(data.shape)
+                c *= 16
+            if data.dtype == 'float16' and kernel.dtype == 'float16' and out_type.dtype == 'float32':# and c >= 24:
                 from tensorizer.ops.gpu import conv2d_NCHW16c_OHWI16o_compute, conv2d_NCHW16c_OHWI16o_schedule
                 strategy.add_implementation(
                     conv2d_NCHW16c_OHWI16o_compute,

@@ -19,3 +19,4 @@
 # transformation passes
 from .transform import *
 from . import memory_alloc
+from . import postpone_slicing

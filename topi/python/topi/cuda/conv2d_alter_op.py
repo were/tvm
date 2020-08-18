@@ -229,13 +229,16 @@ def _conv2d_legalize(attrs, inputs, arg_types):
 
     stride_w, stride_h = attrs.get_int_tuple('strides')
 
-    if data_dtype in ['float16', 'float32'] and kernel_layout == 'OIHW' and (stride_h, stride_w) == (1, 1):
+    if data_dtype in ['float16', 'float32'] and kernel_layout == 'OIHW':
         if data_dtype != 'float16':
             data = relay.cast(data, 'float16')
         kernel = relay.cast(kernel, 'float16')
         new_attrs['out_dtype'] = 'float32'
         kh, kw = attrs.get_int_tuple('kernel_size')
         batch, ic, height, width = get_const_tuple(data_tensor.shape)
+
+        #if ic < 24:
+        #    return None
 
         padding = attrs.get_int_tuple('padding')
         pad_h = pad_w = 0
@@ -258,8 +261,10 @@ def _conv2d_legalize(attrs, inputs, arg_types):
         height += pad_h
         width += pad_w
 
-        oh = (height - kh + 1) // stride_h
-        ow = (width - kw + 1) // stride_w
+        f_conv_dim = lambda indim, kdim, stride: (indim - kdim) // stride + 1
+
+        oh = f_conv_dim(height, kh, stride_h)
+        ow = f_conv_dim(width, kw, stride_w)
         oc = attrs.get_int('channels').value
         ow_changed = False
 
@@ -271,18 +276,32 @@ def _conv2d_legalize(attrs, inputs, arg_types):
         #    data = relay.nn.pad(data, pad_width=((0, 0), (0, 0), (0, 0), (0, diff0 + diff1)))
         #    ow_changed = True
         if not ((oh * ow % 32 == 0 and 32 % ow == 0) or ow % 32 == 0):
+            first_h = stride_h - (height - kh) % stride_h
+            first_w = stride_w - (width - kw) % stride_w
             max_diff_h = 32 - oh % 32
             max_diff_w = 32 - ow % 32
             diffh = diffw = 1e9
             for i in range(max_diff_h + 1):
                 for j in range(max_diff_w + 1):
                     if (((oh + i) * (ow + j) % 32 == 0 and 32 % (ow + j) == 0) or ((ow + j) % 32 == 0)) and i + j < diffh + diffw:
-                        diffh, diffw = i, j
-            assert (height + diffh - kh + 1) * (width + diffw - kw + 1) % 32 == 0
+                        def to_pad(padding, first, stride):
+                            if padding == 0:
+                                return 0
+                            assert padding >= 1
+                            return (padding - 1) * stride + first
+                        diffh, diffw = to_pad(i, first_h, stride_h), to_pad(j, first_w, stride_w)
+            #assert (height + diffh - kh + 1) * (width + diffw - kw + 1) % 32 == 0
             data = relay.nn.pad(data, pad_width=((0, 0), (0, 0), (0, diffh), (0, diffw)))
             ow_changed = True
-        if ic % 16:
-            diff = 16 - ic % 16
+        ic_split = 64
+        ratio = 1e9
+        ic_split = -1
+        for to_split in [16, 32, 64]:
+            if (to_split - ic % to_split) / to_split < ratio:
+                ratio = (to_split - ic % to_split) / to_split
+                ic_split = to_split
+        if ic % ic_split:
+            diff = ic_split - ic % ic_split
             data = relay.nn.pad(data, pad_width=((0, 0), (0, diff), (0, 0), (0, 0)))
             kernel = relay.nn.pad(kernel, pad_width=((0, 0), (0, diff), (0, 0), (0, 0)))
         oc_changed = False

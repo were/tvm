@@ -313,6 +313,16 @@ class RelayBuildModule : public runtime::ModuleNode {
       relay_module = RunDeviceAnnotationPass(relay_module, fallback_dev->value);
     }
 
+    for (int i = 0; i < 10; ++i) {
+      relay_module = transform::InferType()(relay_module);
+      {
+        auto f = tvm::runtime::Registry::Get("relay.transform.PostponeStridedSlice");
+        CHECK(f != nullptr) << "unable to load postpone strided slice pass";
+        Pass postpone = (*f)();
+        relay_module = postpone(relay_module);
+      }
+    }
+    relay_module = transform::InferType()(relay_module);
     LOG(INFO) << AsText(relay_module, false);
     // Fuse the operations if it is needed.
     relay_module = transform::FuseOps()(relay_module);
