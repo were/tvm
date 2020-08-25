@@ -49,6 +49,7 @@ reg.register_strategy("nn.dense", strategy.dense_strategy)
 reg.register_pattern("nn.dense", reg.OpPattern.OUT_ELEMWISE_FUSABLE)
 
 reg.register_strategy("nn.denseDotProd", strategy.dense_strategy)
+#reg.register_pattern("nn.denseDotProd", OpPattern.OPAQUE)
 reg.register_pattern("nn.denseDotProd", OpPattern.OUT_ELEMWISE_FUSABLE)
 
 @reg.register_legalize("nn.dense")
@@ -502,6 +503,7 @@ reg.register_pattern("nn.contrib_conv2d_winograd_nnpack_weight_transform",
 reg.register_strategy("nn.contrib_conv2d_NCHWc", strategy.conv2d_NCHWc_strategy)
 reg.register_pattern("nn.contrib_conv2d_NCHWc",
                      OpPattern.OUT_ELEMWISE_FUSABLE)
+#reg.register_pattern("nn.contrib_conv2d_NCHWc", OpPattern.OPAQUE)
 
 # depthwise_conv2d_NCHWc
 reg.register_strategy("nn.contrib_depthwise_conv2d_NCHWc",

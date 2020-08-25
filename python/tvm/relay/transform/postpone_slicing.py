@@ -78,6 +78,7 @@ class PostponeStridedSlice:
         pass
 
     def transform_function(self, func, mod, _):
+        return func
         transform.InferType()(mod)
         pps = PostponeSlicingPass()
         func = pps.visit(func)

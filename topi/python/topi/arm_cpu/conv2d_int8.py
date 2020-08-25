@@ -45,8 +45,8 @@ def is_int8_hw_support(data_dtype, kernel_dtype):
 
     # 3) Check target
     is_target_support = False
-    for i in tvm.target.Target.current().options:
-        if i.startswith('-mattr=') and ('+dotprod' in i):
+    for i in tvm.target.Target.current().mattr:
+        if '+dotprod' in i:
             is_target_support = True
 
     return is_dtype_support and is_llvm_support and is_target_support
