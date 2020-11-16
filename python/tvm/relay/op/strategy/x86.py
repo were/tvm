@@ -372,4 +372,8 @@ def bitserial_dense_strategy_cpu(attrs, inputs, out_type, target):
 def tensorizer_scheduler(attrs, outs, target):
     with target:
         import tensorizer
-        return tensorizer.INTRINSICS['vnni']['schedule'](outs, attrs)
+        try:
+            strides = attrs.get_int_tuple('strides')
+        except:
+            strides = 'dense'
+        return tensorizer.INTRINSICS['vnni']['schedule'](outs, strides)
