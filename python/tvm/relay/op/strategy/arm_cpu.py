@@ -354,4 +354,4 @@ def schedule_bitserial_dense_arm_cpu(attrs, inputs, out_type, target):
 def tensorizer_scheduler(attrs, outs, target):
     with target:
         import tensorizer
-        return tensorizer.INTRINSICS['vdot']['schedule'](outs)
+        return tensorizer.INTRINSICS['vdot']['schedule'](outs, attrs)
