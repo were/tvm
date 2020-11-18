@@ -20,7 +20,7 @@
 /*!
  * \file storage_access.cc
  */
-#if LLVM_VERSION >= 10
+#if LLVM_VERSION >= 100
 #include <llvm/IR/IntrinsicsNVPTX.h>
 #else
 #include <llvm/IR/Intrinsics.h>
