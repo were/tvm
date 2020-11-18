@@ -29,11 +29,10 @@
 
 #include <unordered_map>
 #include <unordered_set>
-#if LLVM_VERSION >= 100
+#if TVM_LLVM_VERSION >= 100
 #include <llvm/IR/IntrinsicsNVPTX.h>
-#else
-#include <llvm/IR/Intrinsics.h>
 #endif
+#include <llvm/IR/Intrinsics.h>
 
 #include "../../runtime/thread_storage_scope.h"
 #include "ir_util.h"
