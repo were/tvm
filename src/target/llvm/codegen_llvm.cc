@@ -756,11 +756,11 @@ llvm::Value* CodeGenLLVM::CreateIntrinsic(const CallNode* op) {
     // mismatch will have to be treated specially here.
     // TODO(kparzysz-quic): fix this once TVM prefetch uses the same
     // type as LLVM.
-    static auto halfx2 = llvm::VectorType::get(builder_->getHalfTy(), 2);
-    static auto float_ty = builder_->getFloatTy();
-    static auto framgent_half = llvm::StructType::create("fragment.half", halfx2, halfx2, halfx2, halfx2, halfx2, halfx2, halfx2, halfx2);
-    static auto framgent_float = llvm::StructType::create("fragment.float", float_ty, float_ty, float_ty, float_ty, float_ty, float_ty, float_ty, float_ty);
-    static std::map<int, llvm::Type*> ReturnTypes = {
+    auto halfx2 = llvm::VectorType::get(builder_->getHalfTy(), 2);
+    auto float_ty = builder_->getFloatTy();
+    auto framgent_half = llvm::StructType::create("fragment.half", halfx2, halfx2, halfx2, halfx2, halfx2, halfx2, halfx2, halfx2);
+    auto framgent_float = llvm::StructType::create("fragment.float", float_ty, float_ty, float_ty, float_ty, float_ty, float_ty, float_ty, float_ty);
+    std::map<int, llvm::Type*> ReturnTypes = {
       {llvm::Intrinsic::prefetch, llvm::Type::getVoidTy(*ctx_)},
       {llvm::Intrinsic::memset, llvm::Type::getVoidTy(*ctx_)},
       {llvm::Intrinsic::memcpy, llvm::Type::getVoidTy(*ctx_)},
