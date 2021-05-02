@@ -40,6 +40,35 @@
 namespace tvm {
 namespace codegen {
 
+
+struct LLVMConfigNode : public tvm::AttrsNode<LLVMConfigNode> {
+  int vectorize;
+  int slp_vectorize;
+  int disable_unroll;
+
+  TVM_DECLARE_ATTRS(LLVMConfigNode, "tir.transform.LLVMConfig") {
+    TVM_ATTR_FIELD(vectorize)
+        .describe("Whether LLVM backend will vectorize the code automatically")
+        .set_default(1);
+    TVM_ATTR_FIELD(slp_vectorize)
+        .describe("Whether LLVM backend will slp vectorize the code automatically")
+        .set_default(1);
+    TVM_ATTR_FIELD(disable_unroll)
+        .describe("Whether LLVM backend will disable unroll")
+        .set_default(0);
+  }
+};
+
+
+class LLVMConfig : public Attrs {
+ public:
+  TVM_DEFINE_NOTNULLABLE_OBJECT_REF_METHODS(LLVMConfig, Attrs, LLVMConfigNode);
+};
+
+TVM_REGISTER_NODE_TYPE(LLVMConfigNode);
+TVM_REGISTER_PASS_CONFIG_OPTION("tir.LLVMConfig", LLVMConfig);
+
+
 std::unique_ptr<CodeGenLLVM> CodeGenLLVM::Create(llvm::TargetMachine* tm) {
   std::string target = tm->getTarget().getName();
   std::string factory_name = "tvm.codegen.llvm.target_" + target;
@@ -368,8 +397,14 @@ void CodeGenLLVM::Optimize() {
 #else
   builder.Inliner = llvm::createFunctionInliningPass(builder.OptLevel, 0);
 #endif
-  builder.LoopVectorize = true;
-  builder.SLPVectorize = true;
+  auto pass_ctx = tvm::transform::PassContext::Current();
+  auto llvm_config = pass_ctx->GetConfig<LLVMConfig>("tir.LLVMConfig");
+  if (!llvm_config.defined()) {
+    llvm_config = AttrsWithDefaultValues<LLVMConfig>();
+  }
+  builder.LoopVectorize = llvm_config.value()->vectorize;
+  builder.SLPVectorize = llvm_config.value()->slp_vectorize;
+  builder.DisableUnrollLoops = llvm_config.value()->disable_unroll;
   this->InitPassManagerBuilder(&builder);
 
 #if TVM_LLVM_VERSION >= 50
@@ -667,15 +702,23 @@ void CodeGenLLVM::CreateSerialFor(llvm::Value* begin, llvm::Value* end, llvm::Va
   BasicBlock* for_begin = BasicBlock::Create(*ctx_, "for_begin", function_);
   BasicBlock* for_body = BasicBlock::Create(*ctx_, "for_body", function_);
   BasicBlock* for_end = BasicBlock::Create(*ctx_, "for_end", function_);
+  auto current_lmd = lmd_;
+  lmd_.clear();
   builder_->CreateBr(for_begin);
   builder_->SetInsertPoint(for_begin);
   llvm::PHINode* loop_value = builder_->CreatePHI(begin->getType(), 2);
   loop_value->addIncoming(begin, pre_block);
   ICHECK(!var_map_.count(loop_var.get()));
   var_map_[loop_var.get()] = loop_value;
-  builder_->CreateCondBr(CreateLT(loop_var.dtype(), loop_value, end), for_body, for_end,
-                         md_very_likely_branch_);
+  auto bi = builder_->CreateCondBr(CreateLT(loop_var.dtype(), loop_value, end),
+                                   for_body, for_end,
+                                   md_very_likely_branch_);
   builder_->SetInsertPoint(for_body);
+  auto ph = llvm::MDNode::getTemporary(*ctx_, llvm::None);
+  current_lmd.insert(current_lmd.begin(), ph.get());
+  auto md = llvm::MDNode::getDistinct(*ctx_, current_lmd);
+  md->replaceOperandWith(0, md);
+  bi->setMetadata(llvm::LLVMContext::MD_loop, md);
   this->VisitStmt(body);
   var_map_.erase(loop_var.get());
   llvm::Value* loop_next = CreateAdd(loop_var.dtype(), loop_value, stride);
@@ -1319,6 +1362,12 @@ void CodeGenLLVM::VisitStmt_(const ForNode* op) {
   ICHECK(is_zero(op->min));
   analyzer_->Bind(op->loop_var, Range::FromMinExtent(op->min, op->extent));
   if (op->kind == ForKind::kUnrolled) {
+    lmd_.push_back(llvm::MDString::get(*ctx_, "llvm.loop.unroll.enable"));
+    auto ext = op->extent.as<IntImmNode>();
+    ICHECK(ext) << "The extent of a unrolled loop should be a constant";
+    lmd_.push_back(
+      llvm::MDNode::get(*ctx_, {llvm::MDString::get(*ctx_, "llvm.loop.unroll.count"),
+                                llvm::ConstantAsMetadata::get(builder_->getInt32(ext->value))}));
     LOG(WARNING) << "Unroll hint get ignore at CodeGenLLVM backend, "
                  << " consider set unroll_explicit=True";
   } else {

@@ -310,6 +310,8 @@ class CodeGenLLVM : public ExprFunctor<llvm::Value*(const PrimExpr&)>,
   llvm::TargetMachine* target_machine_{nullptr};
   // llvm context
   llvm::LLVMContext* ctx_{nullptr};
+  // Loop metadata buffered
+  std::vector<llvm::Metadata*> lmd_;
   // helpful data types
   llvm::Type* t_void_{nullptr};
   llvm::PointerType* t_void_p_{nullptr};

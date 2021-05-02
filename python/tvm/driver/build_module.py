@@ -79,7 +79,7 @@ def get_binds(args, compact=False, binds=None):
     return binds, arg_list
 
 
-def form_irmodule(sch, args, name, binds):
+def form_irmodule(sch, args, name, binds, keep_trivial_loops):
     """According to the given schedule, form a function.
 
     Parameters
@@ -104,7 +104,7 @@ def form_irmodule(sch, args, name, binds):
     pass_ctx = PassContext.current()
     sch = sch.normalize()
     bounds = schedule.InferBound(sch)
-    stmt = schedule.ScheduleOps(sch, bounds)
+    stmt = schedule.ScheduleOps(sch, bounds, keep_trivial_loops)
 
     compact = schedule.VerifyCompactBuffer(stmt)
     binds, arg_list = get_binds(args, compact, binds)
@@ -119,7 +119,7 @@ def form_irmodule(sch, args, name, binds):
     return tvm.IRModule({name: func})
 
 
-def lower(sch, args, name="main", binds=None, simple_mode=False):
+def lower(sch, args, name="main", binds=None, simple_mode=False, keep_trivial_loops=False):
     """Lowering step before build into target.
 
     Parameters
@@ -161,7 +161,7 @@ def lower(sch, args, name="main", binds=None, simple_mode=False):
 
     # Phase 0
     if isinstance(sch, schedule.Schedule):
-        mod = form_irmodule(sch, args, name, binds)
+        mod = form_irmodule(sch, args, name, binds, keep_trivial_loops)
     else:
         mod = sch
 
